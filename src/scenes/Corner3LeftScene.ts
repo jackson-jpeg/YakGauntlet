@@ -1,10 +1,9 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
-import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail } from '../config/theme';
+import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail, createStoolIcon } from '../config/theme';
 import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
 import { getCharacterQuote } from '../data/characterQuotes';
-import { createArenaAtmosphere } from '../utils/StudioAtmosphere';
 import type { CharacterId } from '../types';
 
 interface BallState {
@@ -877,6 +876,45 @@ export class Corner3LeftScene extends Phaser.Scene {
     showFailEffect(this, this.rimCenterX, this.HOOP_Y, getRandomFail());
 
     this.time.delayedCall(700, () => this.resetBall());
+  }
+
+  // UPDATED: Now converts number colors to strings if needed
+  private showCharacterQuote(text: string, color: string | number): void {
+    let colorString: string;
+    
+    // Check if color is a number and convert to hex string
+    if (typeof color === 'number') {
+      colorString = '#' + color.toString(16).padStart(6, '0');
+    } else {
+      colorString = color;
+    }
+  
+    const quoteText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 100, text, {
+      fontFamily: YAK_FONTS.title,
+      fontSize: '28px',
+      color: colorString,
+      stroke: '#000000',
+      strokeThickness: 6,
+      align: 'center'
+    }).setOrigin(0.5).setDepth(200).setScale(0);
+
+    // Pop in
+    this.tweens.add({
+      targets: quoteText,
+      scale: 1,
+      duration: 400,
+      ease: 'Back.out'
+    });
+
+    // Float up and fade out
+    this.tweens.add({
+      targets: quoteText,
+      y: quoteText.y - 100,
+      alpha: 0,
+      duration: 1500,
+      delay: 800,
+      onComplete: () => quoteText.destroy()
+    });
   }
 
   private handleMiss(): void {

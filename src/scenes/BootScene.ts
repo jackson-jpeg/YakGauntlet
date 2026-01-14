@@ -3,459 +3,642 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { firebaseConfig } from '../config/firebaseConfig';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
-import { YAK_COLORS, YAK_FONTS, STATIONS } from '../config/theme';
-import { GameStateService } from '../services/GameStateService';
-import { getCharacterName } from '../data/characterQuotes';
+import { YAK_COLORS, YAK_FONTS, STATIONS, createStoolIcon } from '../config/theme';
+
+/**
+ * THE YAK GAUNTLET - BOOT SCENE (The Studio)
+ * ------------------------------------------------------------------
+ * A chaotic, interactive physics playground representing the Yak Studio.
+ * Features:
+ * 1. Tossable Crew Heads (Physics)
+ * 2. "The Pile" (Trash/Boxes)
+ * 3. The "Easy Button" Start
+ * 4. Breaking News Ticker (Lore)
+ * 5. Ominous Wet Wheel Background
+ */
 
 export class BootScene extends Phaser.Scene {
+  // Container references
+  private logoContainer!: Phaser.GameObjects.Container;
+  private easyButton!: Phaser.GameObjects.Container;
+  private tickerContainer!: Phaser.GameObjects.Container;
+  private tickerText!: Phaser.GameObjects.Text;
+
+  // State
+  private isTransitioning = false;
+
   constructor() {
     super({ key: 'BootScene' });
   }
 
   preload(): void {
     this.createLoadingUI();
-    this.generateGameTextures();
-    this.generatePixelCrew(); // NEW: Generates pixel heads
+    
+    // We generate all assets programmatically to keep the file size low
+    // and allow for infinite customization without Photoshop.
+    this.generateGameTextures(); // Standard Balls
+    this.generateYakTextures();  // Wheel, Box, Soda, Button
+    this.generatePixelCrew();    // The Crew Heads
   }
 
   create(): void {
-    // Initialize Firebase
+    // 1. Initialize Backend (Silent Fail)
+    this.initFirebase();
+
+    // 2. The Studio Environment
+    this.createStudioBackground();
+    this.createWheelAura();
+
+    // 3. Physics World Setup
+    this.setupPhysicsWorld();
+    this.spawnThePile();      // Boxes, Scales, Sodas
+    this.spawnCrewHeads();    // The tossable heads
+
+    // 4. UI Layer (The Brand)
+    this.createGlitchLogo();
+    this.createStationPreview(); // The "Gauntlet" Map
+    this.createEasyButton();     // The Start Mechanism
+    this.createDataDayTicker();  // The Lore
+
+    // 5. Ambient Effects
+    this.startGraffitiLoop(); // Random text popups
+  }
+
+  update(): void {
+    // Scroll the ticker
+    if (this.tickerText) {
+      this.tickerText.x -= 2.5; // Smooth scroll speed
+      if (this.tickerText.x < -this.tickerText.width) {
+        this.tickerText.x = GAME_WIDTH;
+      }
+    }
+  }
+
+  // =================================================================================================
+  //  INIT & SETUP
+  // =================================================================================================
+
+  private initFirebase(): void {
     try {
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
       this.registry.set('firebase', { app, db });
-    } catch (error) {
-      console.warn('Firebase init skipped (dev mode or config missing)');
+    } catch (e) {
+      console.warn('Firebase skipped (Config missing or Dev mode)');
     }
-
-    // 1. The Environment
-    this.createStudioBackground();
-    this.createAttractMode(); // Falling items
-
-    // 2. The UI Layers
-    this.createLogo();
-    this.createStationPreview(); // Now uses Heads, not dots
-    this.createStartPrompt();
-    this.createNewsTicker(); // The "Data Day" Ticker
   }
 
-  // --- VISUAL SETUP ---
+  private setupPhysicsWorld(): void {
+    // Set bounds so heads bounce off walls (Left, Right, Bottom, Top-Open)
+    this.matter.world.setBounds(0, -1000, GAME_WIDTH, GAME_HEIGHT + 1000);
+    
+    // Enable Mouse/Touch Dragging
+    this.matter.add.mouseSpring({
+      stiffness: 0.2,
+      damping: 0.8,
+      length: 1
+    });
+  }
+
+  // =================================================================================================
+  //  VISUAL LAYERS
+  // =================================================================================================
 
   private createStudioBackground(): void {
-    // Dark Studio Background with gradient
+    // 1. Vibrant Yak gradient background (navy to dark)
     const bg = this.add.graphics();
-    bg.fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x0f0f1e, 0x000000, 1);
+    bg.fillGradientStyle(YAK_COLORS.navyDark, YAK_COLORS.navyDark, YAK_COLORS.bgDark, YAK_COLORS.bgDark, 1);
     bg.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-    // Studio ceiling with lights
-    this.createStudioLights();
+    // 2. Add energetic accent stripes (subtle)
+    const stripeGraphics = this.add.graphics();
+    const stripeColors = [YAK_COLORS.primary, YAK_COLORS.secondary, YAK_COLORS.vibrantGreen, YAK_COLORS.vibrantBlue];
 
-    // Parquet Floor Pattern (The "Studio" Look)
-    const floorGraphics = this.add.graphics();
-    floorGraphics.lineStyle(2, 0x2a2a2a, 0.4);
-    
-    const tileSize = 60;
-    // Draw angled parquet lines
-    for (let x = -GAME_WIDTH; x < GAME_WIDTH * 2; x += tileSize) {
-      for (let y = GAME_HEIGHT * 0.6; y < GAME_HEIGHT * 2; y += tileSize) {
-         // Zig zag pattern
-         if ((Math.floor(x/tileSize) + Math.floor(y/tileSize)) % 2 === 0) {
-             floorGraphics.lineBetween(x, y, x + tileSize, y + tileSize);
-         } else {
-             floorGraphics.lineBetween(x + tileSize, y, x, y + tileSize);
-         }
-      }
+    for (let i = 0; i < 8; i++) {
+      const color = stripeColors[i % stripeColors.length];
+      stripeGraphics.fillStyle(color, 0.03);
+      stripeGraphics.fillRect(0, i * (GAME_HEIGHT / 8), GAME_WIDTH, GAME_HEIGHT / 8);
     }
 
-    // Studio floor shine
-    const floorShine = this.add.graphics();
-    floorShine.fillGradientStyle(0xffffff, 0xffffff, 0x000000, 0x000000, 1);
-    floorShine.fillRect(0, GAME_HEIGHT * 0.6, GAME_WIDTH, GAME_HEIGHT * 0.4);
-    floorShine.setAlpha(0.05);
-    
-    // Add a spotlight effect in the center
-    const spotlight = this.add.circle(GAME_WIDTH/2, GAME_HEIGHT/2 - 100, 350, 0xffffff, 0.08);
-    this.tweens.add({
-      targets: spotlight,
-      alpha: 0.12,
-      scale: 1.15,
-      duration: 3000,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut'
-    });
+    // 3. Add scattered stars/sparkles for energy
+    for (let i = 0; i < 15; i++) {
+      const x = Math.random() * GAME_WIDTH;
+      const y = Math.random() * GAME_HEIGHT;
+      const size = 2 + Math.random() * 4;
 
-    // Studio equipment silhouettes (cameras, stands)
-    this.createStudioEquipment();
-  }
+      const star = this.add.star(x, y, 4, size, size * 2, YAK_COLORS.secondary, 0.3);
 
-  private createStudioLights(): void {
-    // Studio light rigs
-    for (let i = 0; i < 4; i++) {
-      const x = 80 + i * (GAME_WIDTH - 160) / 3;
-      const y = 60;
-
-      // Light fixture
-      const fixture = this.add.rectangle(x, y, 40, 15, 0x2a2a2a);
-      fixture.setStrokeStyle(2, 0x3a3a3a);
-
-      // Light glow
-      const glow = this.add.circle(x, y, 25, 0xfef3c7, 0.3);
+      // Twinkle animation
       this.tweens.add({
-        targets: glow,
-        alpha: 0.5,
-        scale: 1.2,
-        duration: 2000,
+        targets: star,
+        alpha: 0.1,
+        scale: 0.5,
+        duration: 1000 + Math.random() * 2000,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
+        delay: Math.random() * 2000
       });
-
-      // Light beam
-      const beam = this.add.graphics();
-      beam.fillStyle(0xfef3c7, 0.1);
-      beam.fillTriangle(x - 30, y + 10, x + 30, y + 10, x, GAME_HEIGHT * 0.6);
     }
   }
 
-  private createStudioEquipment(): void {
-    // Camera silhouettes on sides
-    const leftCamera = this.add.container(40, GAME_HEIGHT * 0.7);
-    const camBody = this.add.rectangle(0, 0, 30, 20, 0x1a1a1a);
-    const camLens = this.add.circle(15, 0, 8, 0x0a0a0a);
-    const camStand = this.add.rectangle(0, 15, 4, 40, 0x2a2a2a);
-    leftCamera.add([camStand, camBody, camLens]);
-    leftCamera.setAlpha(0.6);
-
-    const rightCamera = this.add.container(GAME_WIDTH - 40, GAME_HEIGHT * 0.7);
-    const camBody2 = this.add.rectangle(0, 0, 30, 20, 0x1a1a1a);
-    const camLens2 = this.add.circle(-15, 0, 8, 0x0a0a0a);
-    const camStand2 = this.add.rectangle(0, 15, 4, 40, 0x2a2a2a);
-    rightCamera.add([camStand2, camBody2, camLens2]);
-    rightCamera.setAlpha(0.6);
-
-    // Microphone stands
-    for (let i = 0; i < 3; i++) {
-      const x = 120 + i * (GAME_WIDTH - 240) / 2;
-      const y = GAME_HEIGHT * 0.75;
-      const stand = this.add.rectangle(x, y, 3, 60, 0x2a2a2a);
-      const mic = this.add.circle(x, y - 30, 6, 0x1a1a1a);
-      mic.setStrokeStyle(1, 0x3a3a3a);
-      stand.setAlpha(0.5);
-      mic.setAlpha(0.5);
-    }
-  }
-
-  private createAttractMode(): void {
-    // Spawns random "flickable" objects falling in the background - Yak style chaos
-    const textures = ['basketball', 'beanbag', 'soccerball', 'wiffleball'];
+  private createWheelAura(): void {
+    // The "Wet Wheel" looms in the background
+    const wheel = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT * 0.4, 'wet_wheel');
     
-    textures.forEach((texture, index) => {
-      this.time.delayedCall(index * 200, () => {
-        const particles = this.add.particles(0, 0, texture, {
-          x: { min: 0, max: GAME_WIDTH },
-          y: -50,
-          lifespan: 4000,
-          speedY: { min: 200, max: 400 },
-          speedX: { min: -50, max: 50 },
-          scale: { min: 0.4, max: 0.7 },
-          rotate: { min: -180, max: 180 },
-          quantity: 1,
-          frequency: 1200,
-          alpha: 0.25,
-          blendMode: 'ADD'
-        });
-      });
+    // Scale to fill a good chunk of screen
+    const scale = Math.min(GAME_WIDTH, GAME_HEIGHT) / 400; 
+    wheel.setScale(scale);
+    wheel.setAlpha(0.08); // Very subtle
+    wheel.setTint(0x999999); // De-saturated
+
+    // Infinite slow spin
+    this.tweens.add({
+        targets: wheel,
+        angle: 360,
+        duration: 40000,
+        repeat: -1,
+        ease: 'Linear'
     });
 
-    // Studio "energy" particles (subtle sparkles)
-    for (let i = 0; i < 20; i++) {
-      const sparkle = this.add.circle(
-        Math.random() * GAME_WIDTH,
-        Math.random() * GAME_HEIGHT * 0.6,
-        Math.random() * 2 + 1,
-        0xf1c40f,
-        0.3
-      );
-      
-      this.tweens.add({
-        targets: sparkle,
-        y: sparkle.y + 100,
-        alpha: 0,
-        duration: 2000 + Math.random() * 2000,
-        repeat: -1,
-        delay: Math.random() * 2000,
-        yoyo: true,
-      });
-    }
-  }
-
-  private createLogo(): void {
-    const logoY = GAME_HEIGHT * 0.3;
-
-    // "THE"
-    this.add.text(GAME_WIDTH / 2, logoY - 90, 'THE', {
-      fontFamily: YAK_FONTS.title,
-      fontSize: '32px',
-      color: '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5);
-
-    // "YAK" (Big & Juicy)
-    const yakText = this.add.text(GAME_WIDTH / 2, logoY, 'YAK', {
-      fontFamily: YAK_FONTS.title,
-      fontSize: '130px',
-      color: '#e74c3c', // Red
-      stroke: '#c0392b',
-      strokeThickness: 12,
-      shadow: { offsetX: 4, offsetY: 4, color: '#000', blur: 10, stroke: true, fill: true }
-    }).setOrigin(0.5);
-
-    // "GAUNTLET"
-    this.add.text(GAME_WIDTH / 2, logoY + 90, 'GAUNTLET', {
-      fontFamily: YAK_FONTS.title,
-      fontSize: '52px',
-      color: '#f1c40f', // Yellow
-      stroke: '#000000',
-      strokeThickness: 8,
-    }).setOrigin(0.5);
-
-    // Idle animation for the main logo
+    // "Breathing" Pulse (The threat of wetness)
     this.tweens.add({
-        targets: yakText,
-        scale: 1.05,
-        angle: 1,
-        duration: 2000,
+        targets: wheel,
+        scale: scale * 1.1,
+        alpha: 0.12,
+        duration: 5000,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut'
     });
   }
 
-  private createStationPreview(): void {
-    const startY = GAME_HEIGHT * 0.55;
-    const spacing = 70;
-    const totalWidth = (STATIONS.length - 1) * spacing;
-    const startX = (GAME_WIDTH / 2) - (totalWidth / 2);
+  // =================================================================================================
+  //  PHYSICS OBJECTS (The "Yak" Elements)
+  // =================================================================================================
 
-    STATIONS.forEach((station, i) => {
-      const x = startX + (i * spacing);
-      
-      // Container for the icon
-      const container = this.add.container(x, startY + 50); // Start lower for pop-up anim
-      container.setAlpha(0);
+  private spawnCrewHeads(): void {
+    // Spawn the cast as bouncy balls
+    const size = 64; 
+    
+    for(let i=0; i<6; i++) {
+        const x = Phaser.Math.Between(100, GAME_WIDTH - 100);
+        const y = Phaser.Math.Between(100, GAME_HEIGHT * 0.4);
+        
+        const head = this.matter.add.image(x, y, `crew_${i}`);
+        head.setDisplaySize(size, size);
+        head.setCircle(size / 2.2); // Hitbox slightly smaller than sprite
+        head.setBounce(0.85); // High bounce
+        head.setFriction(0.1);
+        head.setDensity(0.01); // Light enough to throw
+        
+        // Initial random velocity
+        head.setVelocity(
+            Phaser.Math.Between(-5, 5), 
+            Phaser.Math.Between(-5, 5)
+        );
+    }
+  }
 
-      // 1. Pixel Art Head (Generated in preload)
-      // We map index to specific generated textures
-      const textureKey = `crew_${i % 6}`; 
-      const head = this.add.image(0, 0, textureKey).setScale(3); // Scale up the pixel art
-      
-      // 2. Border/Ring
-      const ring = this.add.graphics();
-      ring.lineStyle(3, station.color, 1);
-      ring.strokeCircle(0, 0, 28);
+  private spawnThePile(): void {
+    // Big Cat's Pile of Trash - Physics Objects
+    const groundY = GAME_HEIGHT - 150;
 
-      container.add([head, ring]);
+    // 1. Cardboard Boxes
+    for(let i=0; i<5; i++) {
+        const box = this.matter.add.image(
+            Phaser.Math.Between(50, GAME_WIDTH-50),
+            groundY - (i * 50),
+            'cardboard_box'
+        );
+        box.setDisplaySize(60 + Math.random()*20, 50 + Math.random()*10);
+        box.setBounce(0.2); // Boxes don't bounce much
+        box.setFriction(0.8);
+        box.setAngle(Math.random() * 360);
+    }
 
-      // Pop up animation
-      this.tweens.add({
-        targets: container,
-        y: startY,
-        alpha: 1,
-        duration: 500,
-        delay: 500 + (i * 100),
-        ease: 'Back.easeOut'
-      });
+    // 2. Frank's Soda Cans
+    for(let i=0; i<3; i++) {
+        const soda = this.matter.add.image(
+            Phaser.Math.Between(100, GAME_WIDTH-100),
+            groundY - 200,
+            'soda_can'
+        );
+        soda.setBounce(0.6);
+        soda.setFriction(0.05); // Rolls easily
+    }
+
+    // 3. Cheah's Scale
+    const scale = this.matter.add.image(GAME_WIDTH/2, groundY, 'cheah_scale');
+    scale.setStatic(false);
+    scale.setDensity(0.5); // Heavy
+  }
+
+  // =================================================================================================
+  //  UI ELEMENTS
+  // =================================================================================================
+
+  private createGlitchLogo(): void {
+    const y = GAME_HEIGHT * 0.25;
+    this.logoContainer = this.add.container(GAME_WIDTH/2, y);
+
+    // Add stool icons on both sides of the logo
+    const leftStool = createStoolIcon(this, -140, 0, 1.5);
+    const rightStool = createStoolIcon(this, 140, 0, 1.5);
+
+    // Rotate stools slightly for personality
+    leftStool.setAngle(-10);
+    rightStool.setAngle(10);
+
+    // Add small stars around the stools
+    const leftStar1 = this.add.star(-160, -30, 5, 6, 12, YAK_COLORS.secondary, 1);
+    const leftStar2 = this.add.star(-120, -35, 5, 4, 8, YAK_COLORS.secondary, 0.8);
+    const rightStar1 = this.add.star(160, -30, 5, 6, 12, YAK_COLORS.secondary, 1);
+    const rightStar2 = this.add.star(120, -35, 5, 4, 8, YAK_COLORS.secondary, 0.8);
+
+    // Main "THE YAK" with vibrant Yak orange-red
+    const yakText = this.add.text(0, 0, 'THE YAK', {
+        fontFamily: 'Arial Black',
+        fontSize: '72px',
+        color: YAK_COLORS.textOrange,
+        stroke: '#000000',
+        strokeThickness: 10,
+        shadow: { offsetX: 5, offsetY: 5, color: '#000', blur: 0, fill: true }
+    }).setOrigin(0.5);
+
+    // "GAUNTLET" with vibrant gold
+    const gauntletText = this.add.text(0, 60, 'GAUNTLET', {
+        fontFamily: 'Arial Black',
+        fontSize: '36px',
+        color: YAK_COLORS.textGold,
+        stroke: '#000000',
+        strokeThickness: 7,
+        shadow: { offsetX: 3, offsetY: 3, color: '#000', blur: 0, fill: true }
+    }).setOrigin(0.5);
+
+    this.logoContainer.add([leftStool, rightStool, leftStar1, leftStar2, rightStar1, rightStar2, yakText, gauntletText]);
+
+    // Pulse animation for energy
+    this.tweens.add({
+        targets: [leftStar1, leftStar2, rightStar1, rightStar2],
+        alpha: 0.3,
+        duration: 1000,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+    });
+
+    // Glitch Animation (Randomly shakes the logo for personality)
+    this.time.addEvent({
+        delay: 2500,
+        loop: true,
+        callback: () => {
+            if (Math.random() > 0.5) {
+                this.tweens.add({
+                    targets: this.logoContainer,
+                    x: GAME_WIDTH/2 + Phaser.Math.Between(-5, 5),
+                    y: y + Phaser.Math.Between(-5, 5),
+                    angle: Phaser.Math.Between(-2, 2),
+                    duration: 50,
+                    yoyo: true,
+                    repeat: 3
+                });
+            }
+        }
     });
   }
 
-  private createStartPrompt(): void {
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    const text = isMobile ? 'TAP TO START' : 'CLICK TO START';
-    
-    const startBtn = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 180, text, {
-        fontFamily: YAK_FONTS.title,
-        fontSize: '36px',
-        color: '#ffffff',
-        backgroundColor: '#000000',
-        padding: { x: 20, y: 10 }
-    })
-    .setOrigin(0.5)
-    .setInteractive({ useHandCursor: true });
+  private createEasyButton(): void {
+    const y = GAME_HEIGHT * 0.72;
 
-    // Blink effect
+    // Visuals - Vibrant Yak styling
+    const base = this.add.circle(0, 10, 68, YAK_COLORS.stoolDark).setStrokeStyle(4, 0x000);
+    const btn = this.add.circle(0, 0, 62, YAK_COLORS.primary).setStrokeStyle(4, YAK_COLORS.primaryDark);
+
+    // Add glow effect
+    const glow = this.add.circle(0, 0, 72, YAK_COLORS.primaryBright, 0.3);
+
+    const text = this.add.text(0, 0, 'easy', {
+        fontFamily: 'Arial Black',
+        fontSize: '40px',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 4
+    }).setOrigin(0.5).setPadding(0, 5, 0, 0);
+
+    // Interaction
+    this.easyButton = this.add.container(GAME_WIDTH/2, y, [glow, base, btn, text]);
+
+    // Invisible Hit Area
+    const hitArea = this.add.circle(GAME_WIDTH/2, y, 75).setInteractive({ useHandCursor: true });
+
+    // Floating animation
     this.tweens.add({
-        targets: startBtn,
-        alpha: 0.5,
-        duration: 800,
+        targets: this.easyButton,
+        y: y - 10,
+        duration: 1500,
         yoyo: true,
-        repeat: -1
+        repeat: -1,
+        ease: 'Sine.easeInOut'
     });
 
-    startBtn.on('pointerdown', () => {
-        this.cameras.main.fadeOut(300, 0, 0, 0);
-        this.time.delayedCall(300, () => {
-            this.scene.start('RunScene');
+    // Pulsing glow
+    this.tweens.add({
+        targets: glow,
+        scale: 1.15,
+        alpha: 0.1,
+        duration: 1000,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+    });
+
+    // Instruction Text - More energetic
+    const prompt = this.add.text(GAME_WIDTH/2, y + 95, 'PRESS TO START', {
+        fontFamily: YAK_FONTS.title,
+        fontSize: '22px',
+        color: YAK_COLORS.textGold,
+        stroke: '#000000',
+        strokeThickness: 5
+    }).setOrigin(0.5);
+
+    // Subtle prompt pulse
+    this.tweens.add({
+        targets: prompt,
+        scale: 1.05,
+        duration: 800,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+    });
+
+    // Click Handler
+    hitArea.on('pointerdown', () => {
+        if (this.isTransitioning) return;
+        this.isTransitioning = true;
+
+        // "Squish" Effect with color change
+        btn.setFillStyle(YAK_COLORS.primaryDark);
+        this.tweens.add({
+            targets: this.easyButton,
+            scaleY: 0.8,
+            y: y + 10,
+            duration: 50,
+            yoyo: true,
+            onComplete: () => this.startGame()
         });
     });
   }
 
-  private createNewsTicker(): void {
-    // Enhanced ticker bar with gradient
-    const bar = this.add.graphics();
-    bar.fillGradientStyle(0x000000, 0x000000, 0x1a1a1a, 0x1a1a1a, 1);
-    bar.fillRect(0, GAME_HEIGHT - 50, GAME_WIDTH, 50);
-    bar.lineStyle(2, YAK_COLORS.secondary, 0.3);
-    bar.moveTo(0, GAME_HEIGHT - 50);
-    bar.lineTo(GAME_WIDTH, GAME_HEIGHT - 50);
-    bar.strokePath();
-    
-    // Top border glow
-    const topGlow = this.add.rectangle(GAME_WIDTH/2, GAME_HEIGHT - 50, GAME_WIDTH, 2, YAK_COLORS.secondary, 0.5);
-    
-    // Dynamic headlines with more Yak personality
-    // Initialize a run to get goalie name
-    const tempState = GameStateService.getState();
-    if (!tempState) {
-      GameStateService.initNewRun();
-    }
-    const state = GameStateService.getState();
-    const goalieName = state?.goalieCharacterId ? getCharacterName(state.goalieCharacterId) : 'BIG CAT';
-    
-    const headlines = [
-        "⚡ CURRENT KING: DAN - 45.2s ⚡",
-        "💧 WORST RUN: TANK - 120.0s (WET) 💧",
-        `🥅 TODAY'S GOALIE: ${goalieName}`,
-        "📊 DATA DAY PROJECTION: 98% CHAOS",
-        "🚫 DON'T SAY LIST: [REDACTED]",
-        "⏰ 10X TIME ALERT IN EFFECT",
-        "🎯 GAUNTLET STATUS: ACTIVE",
-        "🔥 STREAK RECORD: 6 PERFECT STATIONS"
-    ];
-    
-    const fullText = headlines.join("   ▸   ") + "   ▸   ";
-    
-    const ticker = this.add.text(GAME_WIDTH, GAME_HEIGHT - 25, fullText, {
-        fontFamily: 'Courier New',
-        fontSize: '16px',
-        color: '#00ff00',
-        fontStyle: 'bold'
-    }).setOrigin(0, 0.5);
+  private createStationPreview(): void {
+    // Vibrant station icons with emojis
+    const y = GAME_HEIGHT * 0.55;
+    const spacing = 75;
+    const startX = GAME_WIDTH/2 - ((STATIONS.length-1) * spacing) / 2;
 
-    // Scroll it with variable speed
-    let speed = 2.5;
-    this.events.on('update', () => {
-        ticker.x -= speed;
-        if (ticker.x < -ticker.width) {
-            ticker.x = GAME_WIDTH;
-            // Occasionally speed up for "breaking news"
-            speed = Math.random() > 0.8 ? 4 : 2.5;
+    // Title above stations
+    const title = this.add.text(GAME_WIDTH/2, y - 50, '7 CHALLENGES', {
+        fontFamily: YAK_FONTS.title,
+        fontSize: '24px',
+        color: YAK_COLORS.textGold,
+        stroke: '#000000',
+        strokeThickness: 4
+    }).setOrigin(0.5);
+
+    // Pulse animation
+    this.tweens.add({
+        targets: title,
+        scale: 1.05,
+        duration: 1200,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+    });
+
+    STATIONS.forEach((s, i) => {
+        const x = startX + i * spacing;
+
+        // Colorful background circle with glow
+        const glow = this.add.circle(x, y, 20, s.color, 0.3);
+        const iconBg = this.add.circle(x, y, 16, s.color, 1)
+            .setStrokeStyle(3, 0xffffff, 0.9);
+
+        // Emoji icon
+        const emoji = this.add.text(x, y, s.emoji, {
+            fontSize: '22px'
+        }).setOrigin(0.5);
+
+        // Stagger the bounce animations for energy
+        this.tweens.add({
+            targets: [glow, iconBg, emoji],
+            y: y - 5,
+            duration: 800 + (i * 100),
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+            delay: i * 150
+        });
+
+        // Glow pulse
+        this.tweens.add({
+            targets: glow,
+            scale: 1.3,
+            alpha: 0.1,
+            duration: 1000,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+            delay: i * 150
+        });
+    });
+  }
+
+  private createDataDayTicker(): void {
+    const barHeight = 45;
+    const y = GAME_HEIGHT - barHeight/2;
+
+    // 1. Background Bar with Yak colors
+    const bg = this.add.rectangle(GAME_WIDTH/2, y, GAME_WIDTH, barHeight, YAK_COLORS.bgDark).setDepth(90);
+    const border = this.add.rectangle(GAME_WIDTH/2, y - barHeight/2, GAME_WIDTH, 3, YAK_COLORS.primary).setDepth(91);
+
+    // 2. The Text Content (Deep Cuts)
+    const headlines = [
+        "BREAKING: TJ HITS THE BUTTON",
+        "BRANDON WALKER: 'I AM NOT A MORON'",
+        "KB: GEOGRAPHY WIZARD OR ALIEN?",
+        "CLICKY CLICKY CLICKY",
+        "CASE RACE PROTOCOL: INITIATED",
+        "TANK THURSDAY: BEWARE THE VINEGAR",
+        "STEVEN CHEAH: 99.9% CHANCE OF DATA",
+        "MINTZY: EYES CLOSED, HEARTS OPEN",
+        "RONE: BATTLE RAP CHAMPION",
+        "BIG CAT: COFFEE CONSUMPTION CRITICAL",
+        "SAS: KING OF NEW YORK",
+        "10X EVERYTHING",
+        "DON'T SAY LIST: [REDACTED]",
+        "WET WHEEL: SPINNING..."
+    ];
+
+    // Create huge text string
+    const textContent = headlines.join("   ///   ") + "   ///   ";
+
+    // 3. The Text Object with Yak gold
+    this.tickerText = this.add.text(GAME_WIDTH, y, textContent, {
+        fontFamily: YAK_FONTS.mono,
+        fontSize: '20px',
+        color: YAK_COLORS.textGold,
+        fontStyle: 'bold',
+        padding: { top: 12, bottom: 12 }
+    }).setOrigin(0, 0.5).setDepth(92);
+  }
+
+  private startGraffitiLoop(): void {
+    // Random words popping up with vibrant Yak colors
+    const words = ["10X", "WET", "TANK", "VIBES", "DRAIN", "CHEAH", "SCOOF", "PUKE"];
+    const colors = [
+        YAK_COLORS.textOrange,
+        YAK_COLORS.textGold,
+        YAK_COLORS.textGreen,
+        YAK_COLORS.textRed,
+        '#1e88e5', // Vibrant blue
+        '#8e24aa'  // Vibrant purple
+    ];
+
+    this.time.addEvent({
+        delay: 1500,
+        loop: true,
+        callback: () => {
+            const text = words[Phaser.Math.Between(0, words.length-1)];
+            const color = colors[Phaser.Math.Between(0, colors.length-1)];
+            const x = Phaser.Math.Between(50, GAME_WIDTH-50);
+            const y = Phaser.Math.Between(100, GAME_HEIGHT-150);
+
+            const g = this.add.text(x, y, text, {
+                fontFamily: 'Arial Black',
+                fontSize: Math.random() > 0.8 ? '52px' : '28px',
+                color: color,
+                stroke: '#000000',
+                strokeThickness: 5
+            }).setOrigin(0.5).setRotation(Phaser.Math.Between(-0.5, 0.5)).setAlpha(0);
+
+            this.tweens.add({
+                targets: g,
+                alpha: 0.4, // Slightly more visible
+                scale: 1.5,
+                duration: 1000,
+                yoyo: true,
+                onComplete: () => g.destroy()
+            });
         }
     });
   }
 
-  // --- ASSET GENERATION ---
+  private startGame(): void {
+    this.cameras.main.flash(800, 255, 255, 255); // Whiteout transition
+    this.time.delayedCall(500, () => {
+        this.scene.start('RunScene', { isRestart: true });
+    });
+  }
+
+  // =================================================================================================
+  //  ASSET GENERATION (The Factory)
+  // =================================================================================================
 
   private createLoadingUI(): void {
-    const progressBar = this.add.graphics();
-    const progressBox = this.add.graphics();
-    progressBox.fillStyle(0x222222, 0.8);
-    progressBox.fillRect(GAME_WIDTH / 2 - 160, GAME_HEIGHT / 2 - 25, 320, 50);
-    
-    this.load.on('progress', (value: number) => {
-        progressBar.clear();
-        progressBar.fillStyle(0xe74c3c, 1);
-        progressBar.fillRect(GAME_WIDTH / 2 - 150, GAME_HEIGHT / 2 - 15, 300 * value, 30);
+    // Simple bar
+    const bg = this.add.rectangle(GAME_WIDTH/2, GAME_HEIGHT/2, 200, 10, 0x333333);
+    const bar = this.add.rectangle(GAME_WIDTH/2 - 100, GAME_HEIGHT/2, 0, 10, 0xe74c3c).setOrigin(0, 0.5);
+    this.load.on('progress', (val: number) => {
+        bar.width = 200 * val;
     });
-
-    this.load.on('complete', () => {
-        progressBar.destroy();
-        progressBox.destroy();
-    });
+    this.load.on('complete', () => { bg.destroy(); bar.destroy(); });
   }
 
   private generateGameTextures(): void {
-    // Reuse your existing texture generation logic here
-    // Beanbag
-    const beanbag = this.make.graphics({x:0,y:0});
-    beanbag.fillStyle(0xc0392b); beanbag.fillRoundedRect(0,0,40,40,8);
-    beanbag.generateTexture('beanbag', 40, 40); beanbag.destroy();
+    // Standard Balls (Simple circles)
+    const b = this.make.graphics({x:0,y:0}); b.fillStyle(0xe67e22); b.fillCircle(20,20,20); b.generateTexture('basketball',40,40); b.destroy();
+    const s = this.make.graphics({x:0,y:0}); s.fillStyle(0xffffff); s.fillCircle(18,18,18); s.lineStyle(2,0x000); s.strokeCircle(18,18,18); s.generateTexture('soccerball',36,36); s.destroy();
+    const w = this.make.graphics({x:0,y:0}); w.fillStyle(0xdddddd); w.fillCircle(15,15,15); w.generateTexture('wiffleball',30,30); w.destroy();
+    const bb = this.make.graphics({x:0,y:0}); bb.fillStyle(0xc0392b); bb.fillRoundedRect(0,0,32,32,8); bb.generateTexture('beanbag',32,32); bb.destroy();
+  }
 
-    // Basketball
-    const bball = this.make.graphics({x:0,y:0});
-    bball.fillStyle(0xe67e22); bball.fillCircle(25,25,25);
-    bball.lineStyle(2, 0x000000); bball.strokeCircle(25,25,25);
-    bball.lineBetween(25,0,25,50); bball.lineBetween(0,25,50,25);
-    bball.generateTexture('basketball', 50, 50); bball.destroy();
+  private generateYakTextures(): void {
+    // 1. Wet Wheel with vibrant Yak colors
+    const size = 256;
+    const wheel = this.make.graphics({x:0,y:0});
+    const colors = [
+        YAK_COLORS.vibrantRed,
+        YAK_COLORS.vibrantOrange,
+        YAK_COLORS.vibrantYellow,
+        YAK_COLORS.vibrantGreen,
+        YAK_COLORS.vibrantBlue,
+        YAK_COLORS.vibrantPurple
+    ];
+    for(let i=0; i<6; i++) {
+        wheel.fillStyle(colors[i]);
+        wheel.slice(size/2, size/2, size/2, i*(Math.PI/3), (i+1)*(Math.PI/3));
+        wheel.fillPath();
+    }
+    wheel.lineStyle(5, 0xffffff);
+    wheel.strokeCircle(size/2, size/2, size/2);
+    wheel.generateTexture('wet_wheel', size, size);
+    wheel.destroy();
 
-    // Soccer
-    const soccer = this.make.graphics({x:0,y:0});
-    soccer.fillStyle(0xffffff); soccer.fillCircle(22,22,22);
-    soccer.fillStyle(0x000000); soccer.fillCircle(22,22,8); 
-    soccer.fillCircle(10,10,5); soccer.fillCircle(34,34,5);
-    soccer.generateTexture('soccerball', 44, 44); soccer.destroy();
+    // 2. Cardboard Box
+    const box = this.make.graphics({x:0,y:0});
+    box.fillStyle(0xcbaacb); // Box color
+    box.fillRect(0,0,60,50);
+    box.lineStyle(2, 0x8d6e63);
+    box.strokeRect(0,0,60,50);
+    box.beginPath(); box.moveTo(0,0); box.lineTo(60,50); box.strokePath(); // Tape
+    box.generateTexture('cardboard_box', 60, 50);
+    box.destroy();
 
-    // Wiffle
-    const wiffle = this.make.graphics({x:0,y:0});
-    wiffle.fillStyle(0xffffff); wiffle.fillCircle(20,20,20);
-    wiffle.fillStyle(0xdddddd); wiffle.fillCircle(10,20,4); wiffle.fillCircle(30,20,4); wiffle.fillCircle(20,10,4);
-    wiffle.generateTexture('wiffleball', 40, 40); wiffle.destroy();
+    // 3. Cheah Scale (Grey Slab)
+    const scale = this.make.graphics({x:0,y:0});
+    scale.fillStyle(0x424242);
+    scale.fillRoundedRect(0,0,80,20,4);
+    scale.generateTexture('cheah_scale', 80, 20);
+    scale.destroy();
+
+    // 4. Frank's Soda (Blue Can)
+    const can = this.make.graphics({x:0,y:0});
+    can.fillStyle(0x1976d2);
+    can.fillRect(0,0,20,35);
+    can.fillStyle(0xdddddd);
+    can.fillRect(0,0,20,4); // Top rim
+    can.generateTexture('soda_can', 20, 35);
+    can.destroy();
   }
 
   private generatePixelCrew(): void {
-    // Generates 6 distinct "Heads" for the preview icons
-    // Using a simple 8x8 pixel grid logic
-    const colors = [
-        0x3498db, // Blue (Big Cat)
-        0x8e44ad, // Purple (Sas)
-        0xe67e22, // Orange (Tommy)
-        0x2ecc71, // Green (KB)
-        0x7f8c8d, // Grey (Zah)
-        0xc0392b  // Red (Rone/Brandon)
-    ];
-
-    colors.forEach((color, index) => {
-        const g = this.make.graphics({x:0, y:0});
-        
-        // Face Base
-        g.fillStyle(0xffccaa); // Skin
-        g.fillRect(2, 2, 12, 12);
-        
+    // Generates the heads for the physics engine
+    const colors = [0x3498db, 0x8e44ad, 0xe67e22, 0x2ecc71, 0x7f8c8d, 0xc0392b];
+    
+    colors.forEach((color, i) => {
+        const g = this.make.graphics({x:0,y:0});
+        // Skin
+        g.fillStyle(0xffdbac); g.fillRect(4,4,56,56);
         // Hair
-        g.fillStyle(0x5d4037); // Brown hair
-        g.fillRect(2, 0, 12, 4);
-        g.fillRect(1, 2, 2, 6); // Sideburns
-
-        // Eyes / Sunglasses
-        if (index === 0) { // Big Cat Sunglasses
-             g.fillStyle(0x000000);
-             g.fillRect(3, 5, 4, 3);
-             g.fillRect(9, 5, 4, 3);
-             g.fillRect(7, 6, 2, 1); // Bridge
-        } else {
-             g.fillStyle(0x000000);
-             g.fillRect(4, 5, 2, 2);
-             g.fillRect(10, 5, 2, 2);
-        }
-
+        g.fillStyle(0x3e2723); g.fillRect(4,0,56,16);
+        g.fillRect(0,4,8,24); g.fillRect(56,4,8,24); // Sideburns
+        
         // Shirt
-        g.fillStyle(color);
-        g.fillRect(0, 14, 16, 2);
+        g.fillStyle(color); g.fillRect(4,52,56,12);
 
-        // Save
-        g.generateTexture(`crew_${index}`, 16, 16);
+        // Face Details
+        g.fillStyle(0x000000);
+        if(i === 0) { // Big Cat Sunglasses
+            g.fillRect(12, 24, 16, 12);
+            g.fillRect(36, 24, 16, 12);
+            g.fillRect(28, 28, 8, 4); // Bridge
+        } else { // Eyes
+            g.fillRect(16, 28, 8, 8);
+            g.fillRect(40, 28, 8, 8);
+        }
+        
+        g.generateTexture(`crew_${i}`, 64, 64);
         g.destroy();
     });
-  }
-
-  shutdown(): void {
-    // Clean up event handlers
-    this.events.removeAllListeners('update');
-    this.input.removeAllListeners();
-    // Clean up tweens
-    this.tweens.killAll();
-    // Clean up timers
-    this.time.removeAllEvents();
   }
 }

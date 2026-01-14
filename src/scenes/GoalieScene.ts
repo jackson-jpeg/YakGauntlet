@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
-import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail, PHYSICS } from '../config/theme';
+import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail, PHYSICS, createStoolIcon } from '../config/theme';
 import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
 import { createConfetti, flashScreen, shakeCamera } from '../utils/VisualEffects';
@@ -83,7 +83,7 @@ export class GoalieScene extends Phaser.Scene {
     this.instructionText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 80, 'AIM FOR THE CORNERS!', {
       fontSize: '22px',
       fontFamily: YAK_FONTS.title,
-      color: '#4ade80',
+      color: YAK_COLORS.textGreen,
       stroke: '#000000',
       strokeThickness: 4,
     }).setOrigin(0.5).setDepth(100);
@@ -261,6 +261,16 @@ export class GoalieScene extends Phaser.Scene {
         ease: 'Sine.easeInOut'
       });
     });
+
+    // Add Yak stool icons as sideline decoration
+    const stool1 = createStoolIcon(this, 25, this.goalBottom + 60, 1.0);
+    const stool2 = createStoolIcon(this, GAME_WIDTH - 25, this.goalBottom + 60, 1.0);
+    stool1.setDepth(5).setAlpha(0.6);
+    stool2.setDepth(5).setAlpha(0.6);
+
+    // Subtle rotation for personality
+    stool1.setAngle(-8);
+    stool2.setAngle(8);
   }
 
   private createGoalie(): void {

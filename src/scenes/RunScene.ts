@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
-import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail, PHYSICS } from '../config/theme';
+import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail, PHYSICS, createStoolIcon } from '../config/theme';
 import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
 import { createConfetti, createRipple, shakeCamera, flashScreen } from '../utils/VisualEffects';
@@ -63,7 +63,7 @@ export class RunScene extends Phaser.Scene {
     this.instructionText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 80, 'DRAG TO AIM & THROW', {
       fontSize: '22px',
       fontFamily: YAK_FONTS.title,
-      color: '#f1c40f',
+      color: YAK_COLORS.textGold,
       stroke: '#000000',
       strokeThickness: 4,
     }).setOrigin(0.5).setDepth(100);
@@ -185,6 +185,31 @@ export class RunScene extends Phaser.Scene {
       alpha: 0,
       duration: 1200,
       repeat: -1,
+    });
+
+    // Add Yak stool icons on either side for personality
+    const leftStool = createStoolIcon(this, boardX - 140, GAME_HEIGHT - 105, 1.2);
+    const rightStool = createStoolIcon(this, boardX + 140, GAME_HEIGHT - 105, 1.2);
+    leftStool.setDepth(2).setAlpha(0.7);
+    rightStool.setDepth(2).setAlpha(0.7);
+
+    // Subtle sway animation for personality
+    this.tweens.add({
+      targets: leftStool,
+      angle: -3,
+      duration: 2000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    this.tweens.add({
+      targets: rightStool,
+      angle: 3,
+      duration: 2200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
     });
   }
 

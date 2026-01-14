@@ -1,34 +1,61 @@
 // The Yak Gauntlet - Unified Theme & Branding
 // Consistent colors, fonts, and styling across all scenes
+// Based on The Yak show's vibrant, energetic aesthetic
 
 export const YAK_COLORS = {
-  // Primary brand colors
-  primary: 0xe74c3c,        // Yak Red - main brand color
-  primaryDark: 0xc0392b,    // Darker red for accents
-  secondary: 0xf1c40f,      // Gold/Yellow - highlights & accents
-  secondaryDark: 0xd4ac0d,  // Darker gold
+  // Primary Yak brand colors (from show branding)
+  primary: 0xff5722,        // Yak Orange-Red - main brand color
+  primaryBright: 0xff6b35,  // Bright orange for emphasis
+  primaryDark: 0xe64a19,    // Darker orange-red
 
-  // UI colors
-  success: 0x27ae60,        // Green - goals, hits, success
-  successBright: 0x4ade80,  // Bright green for emphasis
-  warning: 0xf39c12,        // Orange - medium power, caution
-  danger: 0xe74c3c,         // Red - misses, failures
+  // Secondary brand colors
+  secondary: 0xffc107,      // Bright Gold/Yellow - highlights & accents
+  secondaryDark: 0xf57c00,  // Darker gold/amber
 
-  // Background colors
-  bgDark: 0x1a1a2e,         // Dark blue-black
-  bgMedium: 0x16213e,       // Medium dark blue
-  bgLight: 0x0f3460,        // Lighter blue accent
+  // Yak Navy (from jerseys/branding)
+  navy: 0x1e3a5f,           // Dark blue accent
+  navyDark: 0x0f1d30,       // Darker navy
+
+  // Success/Energy colors
+  success: 0x4caf50,        // Bright green - goals, hits, success
+  successBright: 0x66bb6a,  // Lighter green for emphasis
+  energy: 0xff9800,         // Energetic orange
+
+  // UI states
+  warning: 0xffca28,        // Bright yellow - caution
+  danger: 0xf44336,         // Bright red - misses, failures
+
+  // Background colors - vibrant Yak style
+  bgDark: 0x0f1419,         // Almost black
+  bgMedium: 0x1a2332,       // Dark blue-grey
+  bgLight: 0x2a3f5f,        // Lighter blue accent
+  bgCream: 0xf5e6d3,        // Vintage cream (from graphics)
+
+  // Vibrant accent colors (from show graphics)
+  vibrantRed: 0xe53935,
+  vibrantOrange: 0xff6f00,
+  vibrantYellow: 0xfdd835,
+  vibrantGreen: 0x43a047,
+  vibrantBlue: 0x1e88e5,
+  vibrantPurple: 0x8e24aa,
 
   // Text colors (as hex strings for Phaser text)
   textWhite: '#ffffff',
-  textGold: '#f1c40f',
-  textGreen: '#4ade80',
-  textRed: '#ef4444',
+  textCream: '#f5e6d3',
+  textGold: '#ffc107',
+  textOrange: '#ff6b35',
+  textGreen: '#66bb6a',
+  textRed: '#f44336',
+  textNavy: '#1e3a5f',
   textGray: '#9ca3af',
 
   // Misc
   white: 0xffffff,
   black: 0x000000,
+
+  // Stool/Icon colors
+  stoolBrown: 0x8b4513,
+  stoolDark: 0x654321,
 };
 
 export const YAK_FONTS = {
@@ -71,15 +98,15 @@ export const PHYSICS = {
   MIN_VELOCITY: 0.1,           // Minimum velocity before stopping
 };
 
-// Station definitions with display info
+// Station definitions with display info - vibrant Yak colors
 export const STATIONS = [
-  { id: 'cornhole', name: 'CORNHOLE', color: 0xc41e3a, emoji: '🎯' },
-  { id: 'goalie', name: 'PENALTY', color: 0x27ae60, emoji: '⚽' },
-  { id: 'wiffle', name: 'WIFFLE', color: 0xffca28, emoji: '🏏' },
-  { id: 'football', name: 'FOOTBALL', color: 0x92400e, emoji: '🏈' },
-  { id: 'corner3_right', name: '3PT RIGHT', color: 0xff6b35, emoji: '🏀' },
-  { id: 'corner3_left', name: '3PT LEFT', color: 0xff6b35, emoji: '🏀' },
-  { id: 'quiz', name: 'QUIZ', color: 0x8b5cf6, emoji: '🧠' },
+  { id: 'cornhole', name: 'CORNHOLE', color: 0xe53935, emoji: '🎯' },      // Vibrant red
+  { id: 'goalie', name: 'PENALTY', color: 0x43a047, emoji: '⚽' },         // Vibrant green
+  { id: 'wiffle', name: 'WIFFLE', color: 0xfdd835, emoji: '🏏' },         // Vibrant yellow
+  { id: 'football', name: 'FOOTBALL', color: 0xff6f00, emoji: '🏈' },     // Vibrant orange
+  { id: 'corner3_right', name: '3PT RIGHT', color: 0xff5722, emoji: '🏀' }, // Yak orange-red
+  { id: 'corner3_left', name: '3PT LEFT', color: 0xff5722, emoji: '🏀' },  // Yak orange-red
+  { id: 'quiz', name: 'QUIZ', color: 0x8e24aa, emoji: '🧠' },             // Vibrant purple
 ] as const;
 
 // Common text styles
@@ -143,4 +170,85 @@ export function getRandomSuccess(): string {
 export function getRandomFail(type: 'miss' | 'close' = 'miss'): string {
   const messages = FAIL_MESSAGES[type];
   return messages[Math.floor(Math.random() * messages.length)];
+}
+
+/**
+ * Create a stool icon (signature Yak element)
+ * Returns a container with the stool graphic
+ */
+export function createStoolIcon(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  scale: number = 1
+): Phaser.GameObjects.Container {
+  const stool = scene.add.container(x, y);
+
+  // Stool legs
+  const legWidth = 3 * scale;
+  const legHeight = 20 * scale;
+  const legSpacing = 12 * scale;
+
+  const leftLeg = scene.add.rectangle(-legSpacing, 0, legWidth, legHeight, YAK_COLORS.stoolDark);
+  const rightLeg = scene.add.rectangle(legSpacing, 0, legWidth, legHeight, YAK_COLORS.stoolDark);
+
+  // Stool seat (ellipse)
+  const seat = scene.add.ellipse(0, -legHeight / 2 - 3 * scale, 18 * scale, 6 * scale, YAK_COLORS.stoolBrown);
+  seat.setStrokeStyle(2 * scale, YAK_COLORS.stoolDark);
+
+  // Cross bar
+  const crossBar = scene.add.rectangle(0, legHeight / 4, 24 * scale, 2 * scale, YAK_COLORS.stoolDark);
+
+  stool.add([leftLeg, rightLeg, crossBar, seat]);
+  return stool;
+}
+
+/**
+ * Create vibrant striped background (Yak aesthetic)
+ */
+export function createStripedBackground(
+  scene: Phaser.Scene,
+  width: number,
+  height: number,
+  colors: number[] = [YAK_COLORS.vibrantRed, YAK_COLORS.vibrantOrange, YAK_COLORS.vibrantYellow, YAK_COLORS.vibrantGreen]
+): Phaser.GameObjects.Graphics {
+  const graphics = scene.add.graphics();
+  const stripeHeight = height / colors.length;
+
+  colors.forEach((color, i) => {
+    graphics.fillStyle(color, 0.8);
+    graphics.fillRect(0, i * stripeHeight, width, stripeHeight);
+  });
+
+  return graphics;
+}
+
+/**
+ * Create textured/distressed text effect (Yak branding style)
+ */
+export function createDistressedText(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  text: string,
+  style: Phaser.Types.GameObjects.Text.TextStyle
+): Phaser.GameObjects.Container {
+  const container = scene.add.container(x, y);
+
+  // Create multiple slightly offset text layers for texture
+  const offsets = [
+    { x: -2, y: -1, alpha: 0.3 },
+    { x: 1, y: 2, alpha: 0.2 },
+    { x: 0, y: 0, alpha: 1 },
+  ];
+
+  offsets.forEach((offset, i) => {
+    const textObj = scene.add.text(offset.x, offset.y, text, {
+      ...style,
+      color: i === offsets.length - 1 ? style.color : '#000000',
+    }).setOrigin(0.5).setAlpha(offset.alpha);
+    container.add(textObj);
+  });
+
+  return container;
 }

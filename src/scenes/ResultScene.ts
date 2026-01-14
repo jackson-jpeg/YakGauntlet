@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
-import { YAK_COLORS, YAK_FONTS, STATIONS } from '../config/theme';
+import { YAK_COLORS, YAK_FONTS, STATIONS, createStoolIcon } from '../config/theme';
 import { GameStateService } from '../services/GameStateService';
 import { LeaderboardService } from '../services/LeaderboardService';
 import type { LeaderboardEntry, RunState, StationId } from '../types';
@@ -14,6 +14,11 @@ export class ResultScene extends Phaser.Scene {
   private playerRank = 0;
   // Track input elements explicitly for safe cleanup
   private inputElements: Phaser.GameObjects.GameObject[] = [];
+  // Native mobile keyboard support
+  private hiddenInput: HTMLInputElement | null = null;
+  private cursorBlink: Phaser.GameObjects.Text | null = null;
+  private cursorBlinkTween: Phaser.Tweens.Tween | null = null;
+  private initialBoxes: Phaser.GameObjects.Graphics[] = [];
 
   constructor() {
     super({ key: 'ResultScene' });
@@ -71,68 +76,118 @@ export class ResultScene extends Phaser.Scene {
   }
 
   private createHeader(isWet: boolean): void {
-    // "RUN COMPLETE" or "WET RUN" header
+    // "RUN COMPLETE" or "WET RUN" header - BIGGER and more impactful
     const headerText = isWet ? 'WET RUN' : 'RUN COMPLETE!';
     const headerColor = isWet ? YAK_COLORS.textRed : YAK_COLORS.textGold;
 
-    const header = this.add.text(GAME_WIDTH / 2, 60, headerText, {
+    const header = this.add.text(GAME_WIDTH / 2, 55, headerText, {
       fontFamily: YAK_FONTS.title,
-      fontSize: '38px',
+      fontSize: '48px',
       color: headerColor,
       stroke: '#000000',
-      strokeThickness: 6,
+      strokeThickness: 8,
+      shadow: {
+        offsetX: 0,
+        offsetY: 0,
+        color: headerColor,
+        blur: 20,
+        stroke: true,
+        fill: true
+      }
     }).setOrigin(0.5).setScale(0);
 
     this.tweens.add({
       targets: header,
       scale: 1,
-      duration: 500,
+      duration: 600,
       ease: 'Back.easeOut',
+      onComplete: () => {
+        // Subtle pulse for emphasis
+        this.tweens.add({
+          targets: header,
+          scale: 1.05,
+          duration: 1000,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut'
+        });
+      }
     });
 
-    // Decorative line
+    // Decorative line with glow
     const line = this.add.graphics();
-    line.lineStyle(3, isWet ? YAK_COLORS.danger : YAK_COLORS.secondary, 0.8);
-    line.moveTo(GAME_WIDTH / 2 - 150, 100);
-    line.lineTo(GAME_WIDTH / 2 + 150, 100);
+    line.lineStyle(4, isWet ? YAK_COLORS.danger : YAK_COLORS.secondary, 1);
+    line.moveTo(GAME_WIDTH / 2 - 180, 105);
+    line.lineTo(GAME_WIDTH / 2 + 180, 105);
     line.strokePath();
+
+    // Add stool icons on either side of header for Yak branding
+    const leftStool = createStoolIcon(this, 40, 55, 1.3);
+    const rightStool = createStoolIcon(this, GAME_WIDTH - 40, 55, 1.3);
+    leftStool.setAngle(-10).setAlpha(0.7);
+    rightStool.setAngle(10).setAlpha(0.7);
   }
 
   private createTimeDisplay(finalTimeMs: number, isWet: boolean): void {
     const timeSeconds = (finalTimeMs / 1000).toFixed(2);
 
-    // Time container
-    const containerY = 180;
+    // Time container - BIGGER and more prominent
+    const containerY = 185;
 
-    // Background panel
+    // Background panel with glow
     const panel = this.add.graphics();
-    panel.fillStyle(0x000000, 0.5);
-    panel.fillRoundedRect(GAME_WIDTH / 2 - 140, containerY - 60, 280, 120, 16);
-    panel.lineStyle(3, isWet ? YAK_COLORS.danger : YAK_COLORS.secondary, 0.8);
-    panel.strokeRoundedRect(GAME_WIDTH / 2 - 140, containerY - 60, 280, 120, 16);
+    panel.fillStyle(0x000000, 0.6);
+    panel.fillRoundedRect(GAME_WIDTH / 2 - 150, containerY - 65, 300, 130, 18);
+    panel.lineStyle(4, isWet ? YAK_COLORS.danger : YAK_COLORS.secondary, 1);
+    panel.strokeRoundedRect(GAME_WIDTH / 2 - 150, containerY - 65, 300, 130, 18);
 
-    // Main time
-    const timeText = this.add.text(GAME_WIDTH / 2, containerY - 5, timeSeconds, {
+    // Outer glow
+    const glow = this.add.graphics();
+    glow.lineStyle(2, isWet ? YAK_COLORS.danger : YAK_COLORS.secondary, 0.3);
+    glow.strokeRoundedRect(GAME_WIDTH / 2 - 158, containerY - 73, 316, 146, 22);
+
+    // Pulsing glow animation
+    this.tweens.add({
+      targets: glow,
+      alpha: 0.5,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    // Main time - BIGGER
+    const timeText = this.add.text(GAME_WIDTH / 2, containerY, timeSeconds, {
       fontFamily: YAK_FONTS.title,
-      fontSize: '72px',
+      fontSize: '80px',
       color: isWet ? YAK_COLORS.textRed : YAK_COLORS.textGreen,
       stroke: '#000000',
-      strokeThickness: 6,
+      strokeThickness: 8,
+      shadow: {
+        offsetX: 0,
+        offsetY: 0,
+        color: isWet ? YAK_COLORS.textRed : YAK_COLORS.textGreen,
+        blur: 15,
+        stroke: true,
+        fill: true
+      }
     }).setOrigin(0.5).setScale(0);
 
     this.tweens.add({
       targets: timeText,
       scale: 1,
-      duration: 600,
-      delay: 300,
-      ease: 'Back.easeOut',
+      duration: 700,
+      delay: 400,
+      ease: 'Elastic.easeOut',
     });
 
-    // "seconds" label
-    this.add.text(GAME_WIDTH / 2, containerY + 45, 'seconds', {
+    // "seconds" label - better styling
+    this.add.text(GAME_WIDTH / 2, containerY + 50, 'seconds', {
       fontFamily: YAK_FONTS.body,
-      fontSize: '18px',
-      color: '#9ca3af',
+      fontSize: '20px',
+      color: '#cbd5e1',
+      stroke: '#000000',
+      strokeThickness: 2,
     }).setOrigin(0.5);
 
     // WET stamp
@@ -166,64 +221,103 @@ export class ResultScene extends Phaser.Scene {
   }
 
   private createStationBreakdown(state: RunState): void {
-    const startY = 320;
+    const startY = 335;
 
-    // Section title
-    this.add.text(GAME_WIDTH / 2, startY, 'STATION BREAKDOWN', {
+    // Section title - improved styling
+    const titleText = this.add.text(GAME_WIDTH / 2, startY, 'STATION BREAKDOWN', {
       fontFamily: YAK_FONTS.title,
-      fontSize: '16px',
-      color: '#9ca3af',
+      fontSize: '20px',
+      color: YAK_COLORS.textGold,
+      stroke: '#000000',
+      strokeThickness: 3,
     }).setOrigin(0.5);
 
-    // Station rows - all 6 stations now complete!
-    const completedStations = ['cornhole', 'goalie', 'wiffle', 'football', 'corner3_right', 'corner3_left'];
+    // Station rows - all 7 stations!
+    const completedStations = ['cornhole', 'goalie', 'wiffle', 'football', 'corner3_right', 'corner3_left', 'quiz'];
 
     completedStations.forEach((stationId, index) => {
       const station = STATIONS.find(s => s.id === stationId);
       if (!station) return;
 
-      const y = startY + 45 + index * 55;
+      const y = startY + 40 + index * 48;
       const misses = state.missCountByStation[stationId as StationId] || 0;
 
-      // Row background
+      // Row background with subtle hover effect
       const rowBg = this.add.graphics();
-      rowBg.fillStyle(0x000000, 0.3);
-      rowBg.fillRoundedRect(30, y - 20, GAME_WIDTH - 60, 45, 10);
+      rowBg.fillStyle(0x000000, 0.4);
+      rowBg.fillRoundedRect(25, y - 18, GAME_WIDTH - 50, 40, 8);
+      rowBg.lineStyle(1, station.color, 0.3);
+      rowBg.strokeRoundedRect(25, y - 18, GAME_WIDTH - 50, 40, 8);
 
-      // Station color indicator
-      this.add.circle(55, y, 12, station.color);
+      // Animate in with stagger
+      rowBg.setAlpha(0);
+      this.tweens.add({
+        targets: rowBg,
+        alpha: 1,
+        duration: 300,
+        delay: 500 + index * 80,
+        ease: 'Power2'
+      });
 
-      // Station name
-      this.add.text(80, y, station.name, {
-        fontFamily: YAK_FONTS.title,
-        fontSize: '16px',
-        color: '#ffffff',
-      }).setOrigin(0, 0.5);
+      // Station color indicator - larger and with emoji
+      const colorCircle = this.add.circle(48, y, 14, station.color, 0.9);
+      colorCircle.setStrokeStyle(2, 0xffffff, 0.6);
 
-      // Checkmark
-      this.add.text(GAME_WIDTH - 130, y, '✓', {
-        fontFamily: YAK_FONTS.body,
-        fontSize: '22px',
-        color: '#4ade80',
+      const emoji = this.add.text(48, y, station.emoji, {
+        fontSize: '18px'
       }).setOrigin(0.5);
 
-      // Miss count
-      const missColor = misses === 0 ? '#4ade80' : misses <= 2 ? '#fbbf24' : '#ef4444';
-      this.add.text(GAME_WIDTH - 60, y, `${misses} miss${misses !== 1 ? 'es' : ''}`, {
+      // Station name - improved
+      const nameText = this.add.text(75, y, station.name, {
+        fontFamily: YAK_FONTS.title,
+        fontSize: '15px',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 2,
+      }).setOrigin(0, 0.5);
+
+      // Checkmark - animated
+      const check = this.add.text(GAME_WIDTH - 140, y, '✓', {
         fontFamily: YAK_FONTS.body,
-        fontSize: '14px',
+        fontSize: '24px',
+        color: YAK_COLORS.textGreen,
+      }).setOrigin(0.5).setScale(0);
+
+      this.tweens.add({
+        targets: check,
+        scale: 1,
+        duration: 400,
+        delay: 600 + index * 80,
+        ease: 'Back.easeOut'
+      });
+
+      // Miss count - better colors
+      const missColor = misses === 0 ? YAK_COLORS.textGreen : misses <= 2 ? YAK_COLORS.textGold : YAK_COLORS.textRed;
+      this.add.text(GAME_WIDTH - 55, y, `${misses} miss${misses !== 1 ? 'es' : ''}`, {
+        fontFamily: YAK_FONTS.body,
+        fontSize: '13px',
         color: missColor,
+        stroke: '#000000',
+        strokeThickness: 2,
       }).setOrigin(0.5);
     });
 
-    // Total misses
+    // Total misses - more prominent
     const totalMisses = (Object.values(state.missCountByStation) as number[]).reduce((a, b) => a + b, 0);
-    const totalY = startY + 45 + completedStations.length * 55 + 15;
+    const totalY = startY + 40 + completedStations.length * 48 + 10;
+
+    const totalBg = this.add.graphics();
+    totalBg.fillStyle(totalMisses === 0 ? YAK_COLORS.success : YAK_COLORS.bgDark, 0.6);
+    totalBg.fillRoundedRect(GAME_WIDTH / 2 - 90, totalY - 15, 180, 30, 8);
+    totalBg.lineStyle(2, totalMisses === 0 ? YAK_COLORS.successBright : YAK_COLORS.secondary, 0.8);
+    totalBg.strokeRoundedRect(GAME_WIDTH / 2 - 90, totalY - 15, 180, 30, 8);
 
     this.add.text(GAME_WIDTH / 2, totalY, `Total Misses: ${totalMisses}`, {
       fontFamily: YAK_FONTS.title,
-      fontSize: '18px',
-      color: totalMisses === 0 ? '#4ade80' : '#ffcdd2',
+      fontSize: '16px',
+      color: totalMisses === 0 ? YAK_COLORS.textGreen : YAK_COLORS.textOrange,
+      stroke: '#000000',
+      strokeThickness: 3,
     }).setOrigin(0.5);
 
     // Full gauntlet completed text
@@ -236,54 +330,93 @@ export class ResultScene extends Phaser.Scene {
   }
 
   private createPlayAgain(): void {
-    const btnY = 565;
+    const btnY = 715;
 
-    // Button background
+    // Outer glow
+    const outerGlow = this.add.graphics();
+    outerGlow.fillStyle(YAK_COLORS.primary, 0.2);
+    outerGlow.fillRoundedRect(GAME_WIDTH / 2 - 135, btnY - 32, 270, 64, 14);
+
+    // Button background - Vibrant Yak orange-red
     const btnBg = this.add.graphics();
     btnBg.fillStyle(YAK_COLORS.primary, 1);
-    btnBg.fillRoundedRect(GAME_WIDTH / 2 - 110, btnY - 25, 220, 50, 10);
+    btnBg.fillRoundedRect(GAME_WIDTH / 2 - 125, btnY - 28, 250, 56, 12);
 
-    // Button border
-    btnBg.lineStyle(3, YAK_COLORS.secondary, 0.8);
-    btnBg.strokeRoundedRect(GAME_WIDTH / 2 - 110, btnY - 25, 220, 50, 10);
+    // Button border with gold accent
+    btnBg.lineStyle(4, YAK_COLORS.secondary, 1);
+    btnBg.strokeRoundedRect(GAME_WIDTH / 2 - 125, btnY - 28, 250, 56, 12);
 
-    // Button text
-    const btnText = this.add.text(GAME_WIDTH / 2, btnY, 'PLAY AGAIN', {
+    // Subtle inner highlight
+    const highlight = this.add.graphics();
+    highlight.fillStyle(0xffffff, 0.15);
+    highlight.fillRoundedRect(GAME_WIDTH / 2 - 120, btnY - 23, 240, 6, 10);
+
+    // Button text - bigger and bolder
+    const btnText = this.add.text(GAME_WIDTH / 2, btnY, 'BACK TO STUDIO', {
       fontFamily: YAK_FONTS.title,
       fontSize: '24px',
       color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 4,
+      shadow: {
+        offsetX: 2,
+        offsetY: 2,
+        color: '#000000',
+        blur: 0,
+        fill: true
+      }
     }).setOrigin(0.5);
 
     // Interactive zone
-    const hitArea = this.add.rectangle(GAME_WIDTH / 2, btnY, 220, 50, 0x000000, 0);
+    const hitArea = this.add.rectangle(GAME_WIDTH / 2, btnY, 250, 56, 0x000000, 0);
     hitArea.setInteractive({ useHandCursor: true });
 
     hitArea.on('pointerover', () => {
       this.tweens.add({
-        targets: [btnBg, btnText],
-        scaleX: 1.05,
-        scaleY: 1.05,
-        duration: 100,
+        targets: [btnBg, btnText, highlight],
+        scaleX: 1.08,
+        scaleY: 1.08,
+        duration: 150,
+        ease: 'Back.easeOut'
       });
+      // Brighten on hover
+      btnBg.clear();
+      btnBg.fillStyle(YAK_COLORS.primaryBright, 1);
+      btnBg.fillRoundedRect(GAME_WIDTH / 2 - 125, btnY - 28, 250, 56, 12);
+      btnBg.lineStyle(4, YAK_COLORS.secondary, 1);
+      btnBg.strokeRoundedRect(GAME_WIDTH / 2 - 125, btnY - 28, 250, 56, 12);
     });
 
     hitArea.on('pointerout', () => {
       this.tweens.add({
-        targets: [btnBg, btnText],
+        targets: [btnBg, btnText, highlight],
         scaleX: 1,
         scaleY: 1,
-        duration: 100,
+        duration: 150,
       });
+      // Reset to default color
+      btnBg.clear();
+      btnBg.fillStyle(YAK_COLORS.primary, 1);
+      btnBg.fillRoundedRect(GAME_WIDTH / 2 - 125, btnY - 28, 250, 56, 12);
+      btnBg.lineStyle(4, YAK_COLORS.secondary, 1);
+      btnBg.strokeRoundedRect(GAME_WIDTH / 2 - 125, btnY - 28, 250, 56, 12);
     });
 
     hitArea.on('pointerdown', () => {
-      this.cameras.main.flash(200, 255, 255, 255);
-      this.time.delayedCall(150, () => {
-        // Reset scene state before changing scenes
+      // Brief squish effect
+      this.tweens.add({
+        targets: [btnBg, btnText, highlight],
+        scaleY: 0.92,
+        duration: 80,
+        yoyo: true,
+        ease: 'Power2'
+      });
+
+      this.cameras.main.flash(250, 255, 140, 50);
+      this.time.delayedCall(180, () => {
+        this.cleanupHiddenInput();
         this.reset();
-        // Initialize a new run
-        GameStateService.initNewRun();
-        this.scene.start('RunScene');
+        this.scene.start('BootScene');
       });
     });
 
@@ -299,38 +432,64 @@ export class ResultScene extends Phaser.Scene {
   }
 
   private createLeaderboardSection(): void {
-    const sectionY = 635;
+    const sectionY = 800;
 
-    // Section background
+    // Section background - more prominent
     const sectionBg = this.add.graphics();
-    sectionBg.fillStyle(0x1e293b, 0.9);
-    sectionBg.fillRoundedRect(20, sectionY - 20, GAME_WIDTH - 40, 330, 12);
-    sectionBg.lineStyle(2, YAK_COLORS.secondary, 0.6);
-    sectionBg.strokeRoundedRect(20, sectionY - 20, GAME_WIDTH - 40, 330, 12);
+    sectionBg.fillStyle(YAK_COLORS.bgDark, 0.95);
+    sectionBg.fillRoundedRect(20, sectionY - 25, GAME_WIDTH - 40, 155, 14);
+    sectionBg.lineStyle(3, YAK_COLORS.secondary, 0.9);
+    sectionBg.strokeRoundedRect(20, sectionY - 25, GAME_WIDTH - 40, 155, 14);
     this.inputElements.push(sectionBg);
 
-    // Section title
-    const titleText = this.add.text(GAME_WIDTH / 2, sectionY, 'LEADERBOARD', {
+    // Outer glow
+    const glow = this.add.graphics();
+    glow.lineStyle(2, YAK_COLORS.secondary, 0.3);
+    glow.strokeRoundedRect(18, sectionY - 27, GAME_WIDTH - 36, 159, 16);
+    this.inputElements.push(glow);
+
+    // Section title - bigger and more vibrant
+    const titleText = this.add.text(GAME_WIDTH / 2, sectionY - 5, 'LEADERBOARD', {
       fontFamily: YAK_FONTS.title,
-      fontSize: '18px',
+      fontSize: '24px',
       color: YAK_COLORS.textGold,
       stroke: '#000000',
-      strokeThickness: 3,
+      strokeThickness: 4,
+      shadow: {
+        offsetX: 0,
+        offsetY: 0,
+        color: YAK_COLORS.textGold,
+        blur: 10,
+        stroke: true,
+        fill: true
+      }
     }).setOrigin(0.5);
     this.inputElements.push(titleText);
 
-    // Input section
-    const inputY = sectionY + 35;
+    // Subtle pulse
+    this.tweens.add({
+      targets: titleText,
+      scale: 1.05,
+      duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
 
-    const instructionsText = this.add.text(GAME_WIDTH / 2, inputY - 15, 'Enter your initials:', {
+    // Input section
+    const inputY = sectionY + 40;
+
+    const instructionsText = this.add.text(GAME_WIDTH / 2, inputY - 18, 'Tap to enter your initials:', {
       fontFamily: YAK_FONTS.body,
-      fontSize: '13px',
-      color: '#cbd5e1',
+      fontSize: '14px',
+      color: '#e2e8f0',
+      stroke: '#000000',
+      strokeThickness: 2,
     }).setOrigin(0.5);
     this.inputElements.push(instructionsText);
 
-    // Input boxes
-    const boxSpacing = 45;
+    // Input boxes with smart focus - bigger and more vibrant
+    const boxSpacing = 52;
     const startX = GAME_WIDTH / 2 - boxSpacing;
 
     for (let i = 0; i < 3; i++) {
@@ -338,108 +497,70 @@ export class ResultScene extends Phaser.Scene {
 
       // Box background
       const box = this.add.graphics();
-      box.fillStyle(0x0f172a, 1);
-      box.fillRoundedRect(x - 18, inputY - 5, 36, 45, 8);
-      box.lineStyle(2, i === 0 ? YAK_COLORS.primary : 0x475569, i === 0 ? 1 : 0.5);
-      box.strokeRoundedRect(x - 18, inputY - 5, 36, 45, 8);
+      box.fillStyle(YAK_COLORS.bgMedium, 1);
+      box.fillRoundedRect(x - 22, inputY - 8, 44, 54, 10);
+      box.lineStyle(3, i === 0 ? YAK_COLORS.primary : YAK_COLORS.navy, i === 0 ? 1 : 0.5);
+      box.strokeRoundedRect(x - 22, inputY - 8, 44, 54, 10);
       this.inputElements.push(box);
+      this.initialBoxes.push(box);
 
-      // Initial text
-      const initialText = this.add.text(x, inputY + 17, '_', {
+      // Inner glow for active box
+      if (i === 0) {
+        const boxGlow = this.add.graphics();
+        boxGlow.fillStyle(YAK_COLORS.primary, 0.2);
+        boxGlow.fillRoundedRect(x - 24, inputY - 10, 48, 58, 12);
+        this.inputElements.push(boxGlow);
+      }
+
+      // Initial text - larger
+      const initialText = this.add.text(x, inputY + 19, '_', {
         fontFamily: YAK_FONTS.mono,
-        fontSize: '28px',
-        color: '#94a3b8',
+        fontSize: '32px',
+        color: '#64748b',
       }).setOrigin(0.5);
 
       this.initialTexts.push(initialText);
       this.inputElements.push(initialText);
+
+      // Interactive area for focusing
+      const boxHitArea = this.add.rectangle(x, inputY + 19, 44, 54, 0x000000, 0);
+      boxHitArea.setInteractive({ useHandCursor: true });
+      this.inputElements.push(boxHitArea);
+
+      boxHitArea.on('pointerdown', () => {
+        // Focus the hidden input to bring up native keyboard
+        this.focusHiddenInput();
+      });
     }
 
-    // Instructions
-    const typeInstructions = this.add.text(GAME_WIDTH / 2, inputY + 55, 'Type or tap keys below', {
-      fontFamily: YAK_FONTS.body,
-      fontSize: '11px',
-      color: '#64748b',
+    // Create blinking cursor for active slot - brighter
+    this.cursorBlink = this.add.text(startX, inputY + 19, '|', {
+      fontFamily: YAK_FONTS.mono,
+      fontSize: '34px',
+      color: YAK_COLORS.textGold,
     }).setOrigin(0.5);
-    this.inputElements.push(typeInstructions);
+    this.inputElements.push(this.cursorBlink);
 
-    // Create on-screen keyboard
-    this.createKeyboard(inputY + 80);
+    // Start cursor blink animation
+    this.cursorBlinkTween = this.tweens.add({
+      targets: this.cursorBlink,
+      alpha: 0,
+      duration: 530,
+      yoyo: true,
+      repeat: -1,
+    });
 
     // Create leaderboard display (hidden initially)
     this.leaderboardContainer = this.add.container(0, 0);
     this.leaderboardContainer.setVisible(false);
 
-    // Setup keyboard input
+    // Setup keyboard input - both Phaser and native HTML
     this.input.keyboard?.on('keydown', this.handleKeyPress, this);
+
+    // Create hidden HTML input for native mobile keyboard
+    this.createHiddenInput();
   }
 
-  private createKeyboard(startY: number): void {
-    const rows = [
-      ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
-      ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
-      ['Z', 'X', 'C', 'V', 'B', 'N', 'M', '←']
-    ];
-
-    const keyWidth = 38;
-    const keyHeight = 34;
-    const keySpacing = 6;
-
-    rows.forEach((row, rowIndex) => {
-      const rowWidth = row.length * keyWidth + (row.length - 1) * keySpacing;
-      const startX = (GAME_WIDTH - rowWidth) / 2;
-
-      row.forEach((letter, colIndex) => {
-        const x = startX + colIndex * (keyWidth + keySpacing);
-        const y = startY + rowIndex * (keyHeight + keySpacing);
-
-        // Key background
-        const keyBg = this.add.graphics();
-        keyBg.fillStyle(0x334155, 1);
-        keyBg.fillRoundedRect(x, y, keyWidth, keyHeight, 6);
-        keyBg.lineStyle(1, 0x475569, 0.8);
-        keyBg.strokeRoundedRect(x, y, keyWidth, keyHeight, 6);
-        this.inputElements.push(keyBg);
-
-        // Key text
-        const keyText = this.add.text(x + keyWidth / 2, y + keyHeight / 2, letter, {
-          fontFamily: YAK_FONTS.title,
-          fontSize: letter === '←' ? '20px' : '16px',
-          color: '#e2e8f0',
-        }).setOrigin(0.5);
-        this.inputElements.push(keyText);
-
-        // Interactive area
-        const hitArea = this.add.rectangle(x + keyWidth / 2, y + keyHeight / 2, keyWidth, keyHeight, 0x000000, 0);
-        hitArea.setInteractive({ useHandCursor: true });
-        this.inputElements.push(hitArea);
-
-        hitArea.on('pointerover', () => {
-          keyBg.clear();
-          keyBg.fillStyle(0x475569, 1);
-          keyBg.fillRoundedRect(x, y, keyWidth, keyHeight, 6);
-          keyBg.lineStyle(2, YAK_COLORS.primary, 0.8);
-          keyBg.strokeRoundedRect(x, y, keyWidth, keyHeight, 6);
-        });
-
-        hitArea.on('pointerout', () => {
-          keyBg.clear();
-          keyBg.fillStyle(0x334155, 1);
-          keyBg.fillRoundedRect(x, y, keyWidth, keyHeight, 6);
-          keyBg.lineStyle(1, 0x475569, 0.8);
-          keyBg.strokeRoundedRect(x, y, keyWidth, keyHeight, 6);
-        });
-
-        hitArea.on('pointerdown', () => {
-          if (letter === '←') {
-            this.handleBackspace();
-          } else {
-            this.handleLetterInput(letter);
-          }
-        });
-      });
-    });
-  }
 
   private handleKeyPress(event: KeyboardEvent): void {
     if (this.hasSubmitted) return;
@@ -465,8 +586,14 @@ export class ResultScene extends Phaser.Scene {
     // Move to next box
     this.currentInitialIndex++;
 
-    // Update box highlights
+    // Update hidden input to match
+    if (this.hiddenInput) {
+      this.hiddenInput.value = this.initials.join('');
+    }
+
+    // Update box highlights and cursor
     this.updateBoxHighlights();
+    this.updateCursorPosition();
 
     // Auto-submit when all 3 letters entered
     if (this.currentInitialIndex === 3) {
@@ -480,12 +607,34 @@ export class ResultScene extends Phaser.Scene {
       this.initials[this.currentInitialIndex] = '';
       this.initialTexts[this.currentInitialIndex].setText('_');
       this.initialTexts[this.currentInitialIndex].setColor('#94a3b8');
+
+      // Update hidden input to match
+      if (this.hiddenInput) {
+        this.hiddenInput.value = this.initials.join('');
+      }
+
       this.updateBoxHighlights();
+      this.updateCursorPosition();
     }
   }
 
   private updateBoxHighlights(): void {
-    // This would require redrawing the boxes - simplified for now
+    // Redraw boxes with proper highlight for current index
+    this.initialBoxes.forEach((box, i) => {
+      const boxSpacing = 52;
+      const startX = GAME_WIDTH / 2 - boxSpacing;
+      const inputY = 840;
+      const x = startX + i * boxSpacing;
+
+      box.clear();
+      box.fillStyle(YAK_COLORS.bgMedium, 1);
+      box.fillRoundedRect(x - 22, inputY - 8, 44, 54, 10);
+
+      // Highlight the current box with vibrant Yak primary color
+      const isActive = i === this.currentInitialIndex;
+      box.lineStyle(3, isActive ? YAK_COLORS.primary : YAK_COLORS.navy, isActive ? 1 : 0.5);
+      box.strokeRoundedRect(x - 22, inputY - 8, 44, 54, 10);
+    });
   }
 
   private submitScore(): void {
@@ -654,14 +803,108 @@ export class ResultScene extends Phaser.Scene {
     }
   }
 
+  private createHiddenInput(): void {
+    // Create a hidden HTML input for native mobile keyboard
+    this.hiddenInput = document.createElement('input');
+    this.hiddenInput.type = 'text';
+    this.hiddenInput.maxLength = 3;
+    this.hiddenInput.style.position = 'absolute';
+    this.hiddenInput.style.opacity = '0';
+    this.hiddenInput.style.pointerEvents = 'none';
+    this.hiddenInput.style.left = '-9999px';
+    this.hiddenInput.autocomplete = 'off';
+    this.hiddenInput.autocapitalize = 'characters';
+
+    // Add to DOM
+    document.body.appendChild(this.hiddenInput);
+
+    // Handle input from native keyboard
+    this.hiddenInput.addEventListener('input', (e) => {
+      const target = e.target as HTMLInputElement;
+      const value = target.value.toUpperCase();
+
+      // Clear and rebuild from input value
+      this.initials = ['', '', ''];
+      this.currentInitialIndex = 0;
+
+      for (let i = 0; i < Math.min(value.length, 3); i++) {
+        const char = value[i];
+        if (char >= 'A' && char <= 'Z') {
+          this.initials[i] = char;
+          this.initialTexts[i].setText(char);
+          this.initialTexts[i].setColor('#ffffff');
+          this.currentInitialIndex = i + 1;
+        }
+      }
+
+      // Fill remaining with underscores
+      for (let i = this.currentInitialIndex; i < 3; i++) {
+        this.initialTexts[i].setText('_');
+        this.initialTexts[i].setColor('#94a3b8');
+      }
+
+      // Update cursor position and box highlights
+      this.updateCursorPosition();
+      this.updateBoxHighlights();
+
+      // Auto-submit when 3 letters entered
+      if (this.currentInitialIndex === 3 && !this.hasSubmitted) {
+        this.time.delayedCall(300, () => this.submitScore());
+      }
+    });
+
+    // Auto-focus on mobile devices
+    if (this.isMobile()) {
+      this.time.delayedCall(500, () => {
+        this.focusHiddenInput();
+      });
+    }
+  }
+
+  private focusHiddenInput(): void {
+    if (this.hiddenInput && !this.hasSubmitted) {
+      this.hiddenInput.focus();
+    }
+  }
+
+  private cleanupHiddenInput(): void {
+    if (this.hiddenInput) {
+      this.hiddenInput.remove();
+      this.hiddenInput = null;
+    }
+  }
+
+  private updateCursorPosition(): void {
+    if (this.cursorBlink && this.currentInitialIndex < 3) {
+      const boxSpacing = 52;
+      const startX = GAME_WIDTH / 2 - boxSpacing;
+      const inputY = 859; // Match the input section Y
+      this.cursorBlink.setPosition(startX + this.currentInitialIndex * boxSpacing, inputY);
+      this.cursorBlink.setVisible(true);
+    } else if (this.cursorBlink) {
+      this.cursorBlink.setVisible(false);
+    }
+  }
+
   private reset(): void {
     // Reset all scene state
     this.initials = ['', '', ''];
     this.currentInitialIndex = 0;
     this.initialTexts = [];
+    this.initialBoxes = [];
     this.inputElements = [];
     this.hasSubmitted = false;
     this.playerRank = 0;
+
+    // Clean up HTML input
+    this.cleanupHiddenInput();
+
+    // Clean up cursor blink
+    if (this.cursorBlinkTween) {
+      this.cursorBlinkTween.stop();
+      this.cursorBlinkTween = null;
+    }
+    this.cursorBlink = null;
 
     // Clean up keyboard listener
     this.input.keyboard?.off('keydown', this.handleKeyPress, this);
@@ -674,16 +917,30 @@ export class ResultScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    // Clean up HTML input FIRST (critical for mobile)
+    this.cleanupHiddenInput();
+
+    // Clean up cursor blink
+    if (this.cursorBlinkTween) {
+      this.cursorBlinkTween.stop();
+      this.cursorBlinkTween = null;
+    }
+    this.cursorBlink = null;
+
     // Clean up event handlers
     this.events.removeAllListeners('update');
     this.input.removeAllListeners();
     this.input.keyboard?.off('keydown', this.handleKeyPress, this);
+
     // Clean up tweens
     this.tweens.killAll();
+
     // Clean up timers
     this.time.removeAllEvents();
+
     // Clear tracked elements
     this.inputElements = [];
+    this.initialBoxes = [];
   }
 
   private isMobile(): boolean {

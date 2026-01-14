@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
-import { YAK_COLORS, YAK_FONTS, getRandomSuccess } from '../config/theme';
+import { YAK_COLORS, YAK_FONTS, getRandomSuccess, createStoolIcon } from '../config/theme';
 import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
 import { getCharacterQuote } from '../data/characterQuotes';
