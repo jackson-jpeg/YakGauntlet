@@ -274,13 +274,14 @@ export class BootScene extends Phaser.Scene {
         padding: { x: 8, y: 4 }
     }).setOrigin(0.5);
 
-    // 4. Hit Area
-    // Correctly enable interactivity on a generic geometry object
-    const hit = this.add.circle(0, 10, 70);
-    hit.setInteractive(new Phaser.Geom.Circle(0, 10, 70), Phaser.Geom.Circle.Contains);
-    hit.input!.cursor = 'pointer';
+    // 4. Hit Area - transparent rectangle
+    const hit = this.add.rectangle(0, 0, 150, 150, 0x000000, 0.01);
+    hit.setInteractive({ useHandCursor: true });
 
     this.easyButton.add([btn, text, subText, hit]);
+
+    // Make sure the hit area is on top
+    this.easyButton.bringToTop(hit);
 
     // Animations
     this.tweens.add({
@@ -296,7 +297,7 @@ export class BootScene extends Phaser.Scene {
     hit.on('pointerdown', () => {
         if(this.isTransitioning) return;
         this.isTransitioning = true;
-        
+
         // Button Squish
         this.tweens.add({
             targets: [btn, text],
