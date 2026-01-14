@@ -645,4 +645,14 @@ export class FootballScene extends Phaser.Scene {
   update(): void {
     updateTimer(this.ui.timerText);
   }
+
+  shutdown(): void {
+    // Clean up event handlers
+    this.events.removeAllListeners('update');
+    this.input.removeAllListeners();
+    // Clean up tweens
+    this.tweens.killAll();
+    // Clean up timers
+    this.time.removeAllEvents();
+  }
 }

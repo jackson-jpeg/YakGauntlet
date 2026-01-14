@@ -903,4 +903,14 @@ export class Corner3LeftScene extends Phaser.Scene {
   private getDistance(x1: number, y1: number, x2: number, y2: number): number {
     return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
   }
+
+  shutdown(): void {
+    // Clean up event handlers
+    this.events.removeAllListeners('update');
+    this.input.removeAllListeners();
+    // Clean up tweens
+    this.tweens.killAll();
+    // Clean up timers
+    this.time.removeAllEvents();
+  }
 }

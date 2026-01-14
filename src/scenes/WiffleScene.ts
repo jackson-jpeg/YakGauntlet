@@ -537,4 +537,14 @@ export class WiffleScene extends Phaser.Scene {
 
     updateTimer(this.ui.timerText);
   }
+
+  shutdown(): void {
+    // Clean up event handlers
+    this.events.removeAllListeners('update');
+    this.input.removeAllListeners();
+    // Clean up tweens
+    this.tweens.killAll();
+    // Clean up timers
+    this.time.removeAllEvents();
+  }
 }

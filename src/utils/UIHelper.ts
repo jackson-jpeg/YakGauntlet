@@ -129,14 +129,20 @@ export function updateTimer(timerText: Phaser.GameObjects.Text): void {
     // Color changes for urgency
     if (timeMs > 60000) {
       timerText.setColor('#ef4444');
+      // Pulse effect for critical time
+      timerText.setScale(1 + Math.sin(Date.now() / 100) * 0.05);
     } else if (timeMs > 45000) {
       timerText.setColor('#fbbf24');
+      timerText.setScale(1);
+    } else {
+      timerText.setColor('#ffffff');
+      timerText.setScale(1);
     }
   }
 }
 
 /**
- * Creates the success celebration effect
+ * Creates the success celebration effect with enhanced animations
  */
 export function showSuccessEffect(
   scene: Phaser.Scene,
@@ -145,54 +151,116 @@ export function showSuccessEffect(
   message: string,
   onComplete?: () => void
 ): void {
-  // Flash
+  // Enhanced flash with color variation
   scene.cameras.main.flash(400, 100, 255, 100);
 
-  // Confetti burst
-  for (let i = 0; i < 30; i++) {
-    const colors = [YAK_COLORS.primary, YAK_COLORS.secondary, YAK_COLORS.success, 0x3b82f6, 0xa855f7];
-    const particle = scene.add.rectangle(
-      x + (Math.random() - 0.5) * 60,
-      y + (Math.random() - 0.5) * 60,
-      Math.random() * 12 + 4,
-      Math.random() * 12 + 4,
-      colors[Math.floor(Math.random() * colors.length)]
-    ).setDepth(200).setRotation(Math.random() * Math.PI);
+  // Ripple effect
+  for (let i = 0; i < 3; i++) {
+    const ripple = scene.add.circle(x, y, 20, 0x4ade80, 0);
+    ripple.setStrokeStyle(4, 0x4ade80, 0.6).setDepth(199);
+    scene.tweens.add({
+      targets: ripple,
+      radius: 150 + i * 50,
+      alpha: 0,
+      duration: 600 + i * 100,
+      delay: i * 100,
+      ease: 'Power2',
+      onComplete: () => ripple.destroy()
+    });
+  }
+
+  // Enhanced confetti burst with more variety
+  for (let i = 0; i < 40; i++) {
+    const colors = [YAK_COLORS.primary, YAK_COLORS.secondary, YAK_COLORS.success, 0x3b82f6, 0xa855f7, 0xff6b35];
+    const isCircle = Math.random() > 0.5;
+    const size = Math.random() * 10 + 4;
+    
+    const particle = isCircle
+      ? scene.add.circle(
+          x + (Math.random() - 0.5) * 80,
+          y + (Math.random() - 0.5) * 80,
+          size,
+          colors[Math.floor(Math.random() * colors.length)],
+          0.9
+        ).setDepth(200)
+      : scene.add.rectangle(
+          x + (Math.random() - 0.5) * 80,
+          y + (Math.random() - 0.5) * 80,
+          size * 2,
+          size,
+          colors[Math.floor(Math.random() * colors.length)],
+          0.9
+        ).setDepth(200).setRotation(Math.random() * Math.PI);
+
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 150 + Math.random() * 200;
+    const targetX = x + Math.cos(angle) * distance;
+    const targetY = y + Math.sin(angle) * distance - Math.random() * 100;
 
     scene.tweens.add({
       targets: particle,
-      x: particle.x + (Math.random() - 0.5) * 250,
-      y: particle.y + Math.random() * 150 - 200,
-      rotation: particle.rotation + Math.PI * 3,
+      x: targetX,
+      y: targetY,
+      rotation: particle.rotation + Math.PI * (4 + Math.random() * 2),
       alpha: 0,
-      duration: 1000,
+      scale: 0.2,
+      duration: 1000 + Math.random() * 500,
       ease: 'Power2',
       onComplete: () => particle.destroy()
     });
   }
 
-  // Success text
+  // Enhanced success text with glow
   const text = scene.add.text(GAME_WIDTH / 2, y - 50, message, {
-    fontSize: '72px',
+    fontSize: '80px',
     fontFamily: YAK_FONTS.title,
     color: '#4ade80',
     stroke: '#000000',
-    strokeThickness: 8
+    strokeThickness: 10,
+    shadow: {
+      offsetX: 0,
+      offsetY: 0,
+      color: '#4ade80',
+      blur: 20,
+      stroke: true,
+      fill: true
+    }
   }).setOrigin(0.5).setDepth(250).setScale(0);
 
+  // Text glow effect
+  const glow = scene.add.text(GAME_WIDTH / 2, y - 50, message, {
+    fontSize: '80px',
+    fontFamily: YAK_FONTS.title,
+    color: '#4ade80',
+    alpha: 0.3,
+  }).setOrigin(0.5).setDepth(249).setScale(0);
+
   scene.tweens.add({
-    targets: text,
+    targets: [text, glow],
     scale: 1,
     duration: 300,
     ease: 'Back.easeOut',
     onComplete: () => {
+      // Pulse animation
       scene.tweens.add({
         targets: text,
-        scale: 1.1,
-        duration: 500,
+        scale: 1.15,
+        duration: 400,
         yoyo: true,
+        repeat: 1,
+        ease: 'Sine.easeInOut',
         onComplete: () => {
-          if (onComplete) onComplete();
+          // Glow pulse
+          scene.tweens.add({
+            targets: glow,
+            scale: 1.3,
+            alpha: 0,
+            duration: 500,
+            onComplete: () => {
+              glow.destroy();
+              if (onComplete) onComplete();
+            }
+          });
         }
       });
     }
@@ -200,7 +268,7 @@ export function showSuccessEffect(
 }
 
 /**
- * Creates the fail/miss effect
+ * Creates the fail/miss effect with enhanced feedback
  */
 export function showFailEffect(
   scene: Phaser.Scene,
@@ -208,23 +276,83 @@ export function showFailEffect(
   y: number,
   message: string
 ): void {
-  scene.cameras.main.shake(150, 0.01);
+  // Enhanced shake
+  scene.cameras.main.shake(200, 0.015);
 
+  // Red flash
+  scene.cameras.main.flash(150, 239, 68, 68, false, undefined, 0.2);
+
+  // Impact particles
+  for (let i = 0; i < 15; i++) {
+    const particle = scene.add.circle(
+      x + (Math.random() - 0.5) * 40,
+      y + (Math.random() - 0.5) * 40,
+      Math.random() * 4 + 2,
+      0xef4444,
+      0.8
+    ).setDepth(199);
+
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 30 + Math.random() * 50;
+
+    scene.tweens.add({
+      targets: particle,
+      x: x + Math.cos(angle) * distance,
+      y: y + Math.sin(angle) * distance,
+      alpha: 0,
+      scale: 0,
+      duration: 400,
+      ease: 'Power2',
+      onComplete: () => particle.destroy()
+    });
+  }
+
+  // Enhanced fail text with shake animation
   const text = scene.add.text(x, y - 30, message, {
-    fontSize: '48px',
+    fontSize: '56px',
     fontFamily: YAK_FONTS.title,
     color: '#ef4444',
     stroke: '#000000',
-    strokeThickness: 5
-  }).setOrigin(0.5).setDepth(200);
+    strokeThickness: 6,
+    shadow: {
+      offsetX: 0,
+      offsetY: 0,
+      color: '#ef4444',
+      blur: 15,
+      stroke: true,
+      fill: true
+    }
+  }).setOrigin(0.5).setDepth(200).setScale(0);
 
+  // Entrance animation with shake
   scene.tweens.add({
     targets: text,
-    y: text.y - 60,
-    alpha: 0,
     scale: 1.2,
-    duration: 700,
-    ease: 'Power2',
-    onComplete: () => text.destroy()
+    duration: 200,
+    ease: 'Back.easeOut',
+    onComplete: () => {
+      // Shake effect
+      scene.tweens.add({
+        targets: text,
+        x: text.x + 5,
+        duration: 50,
+        yoyo: true,
+        repeat: 3,
+        ease: 'Sine.easeInOut',
+        onComplete: () => {
+          // Exit animation
+          scene.tweens.add({
+            targets: text,
+            y: text.y - 80,
+            alpha: 0,
+            scale: 1.4,
+            rotation: 0.1,
+            duration: 600,
+            ease: 'Power2',
+            onComplete: () => text.destroy()
+          });
+        }
+      });
+    }
   });
 }

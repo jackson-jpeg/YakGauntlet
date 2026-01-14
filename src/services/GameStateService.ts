@@ -116,6 +116,31 @@ class GameStateServiceClass {
     return this.runState?.wet ?? false;
   }
 
+  resetGame(): void {
+    if (this.runState) {
+      // Reset to first station
+      this.runState.currentStationId = STATION_ORDER[0];
+      // Reset timer
+      this.runState.startTimeMs = 0;
+      this.runState.endTimeMs = null;
+      // Reset miss counts
+      this.runState.missCountByStation = {
+        cornhole: 0,
+        goalie: 0,
+        wiffle: 0,
+        football: 0,
+        corner3_right: 0,
+        corner3_left: 0,
+      };
+      // Reset wet status
+      this.runState.wet = false;
+      // Generate new runId and goalie
+      this.runState.runId = crypto.randomUUID();
+      const goalieIndex = this.hashStringToIndex(this.runState.runId, CHARACTERS.length);
+      this.runState.goalieCharacterId = CHARACTERS[goalieIndex];
+    }
+  }
+
   private hashStringToIndex(str: string, max: number): number {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {

@@ -3,7 +3,7 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
 import { YAK_COLORS, YAK_FONTS, STATIONS } from '../config/theme';
 import { GameStateService } from '../services/GameStateService';
 import { LeaderboardService } from '../services/LeaderboardService';
-import type { LeaderboardEntry } from '../types';
+import type { LeaderboardEntry, RunState, StationId } from '../types';
 
 export class ResultScene extends Phaser.Scene {
   private initials: string[] = ['', '', ''];
@@ -12,6 +12,8 @@ export class ResultScene extends Phaser.Scene {
   private leaderboardContainer!: Phaser.GameObjects.Container;
   private hasSubmitted = false;
   private playerRank = 0;
+  // Track input elements explicitly for safe cleanup
+  private inputElements: Phaser.GameObjects.GameObject[] = [];
 
   constructor() {
     super({ key: 'ResultScene' });
@@ -22,11 +24,13 @@ export class ResultScene extends Phaser.Scene {
     this.initials = ['', '', ''];
     this.currentInitialIndex = 0;
     this.initialTexts = [];
+    this.inputElements = [];
     this.hasSubmitted = false;
     this.playerRank = 0;
 
     const state = GameStateService.getState();
     if (!state) {
+      console.warn('No game state available, returning to boot scene');
       this.scene.start('BootScene');
       return;
     }
@@ -161,7 +165,7 @@ export class ResultScene extends Phaser.Scene {
     });
   }
 
-  private createStationBreakdown(state: any): void {
+  private createStationBreakdown(state: RunState): void {
     const startY = 320;
 
     // Section title
@@ -179,7 +183,7 @@ export class ResultScene extends Phaser.Scene {
       if (!station) return;
 
       const y = startY + 45 + index * 55;
-      const misses = state.missCountByStation[stationId] || 0;
+      const misses = state.missCountByStation[stationId as StationId] || 0;
 
       // Row background
       const rowBg = this.add.graphics();
@@ -213,7 +217,7 @@ export class ResultScene extends Phaser.Scene {
     });
 
     // Total misses
-    const totalMisses = Object.values(state.missCountByStation).reduce((a: number, b: number) => a + b, 0);
+    const totalMisses = (Object.values(state.missCountByStation) as number[]).reduce((a, b) => a + b, 0);
     const totalY = startY + 45 + completedStations.length * 55 + 15;
 
     this.add.text(GAME_WIDTH / 2, totalY, `Total Misses: ${totalMisses}`, {
@@ -275,6 +279,8 @@ export class ResultScene extends Phaser.Scene {
     hitArea.on('pointerdown', () => {
       this.cameras.main.flash(200, 255, 255, 255);
       this.time.delayedCall(150, () => {
+        // Reset scene state before changing scenes
+        this.reset();
         // Initialize a new run
         GameStateService.initNewRun();
         this.scene.start('RunScene');
@@ -301,24 +307,27 @@ export class ResultScene extends Phaser.Scene {
     sectionBg.fillRoundedRect(20, sectionY - 20, GAME_WIDTH - 40, 330, 12);
     sectionBg.lineStyle(2, YAK_COLORS.secondary, 0.6);
     sectionBg.strokeRoundedRect(20, sectionY - 20, GAME_WIDTH - 40, 330, 12);
+    this.inputElements.push(sectionBg);
 
     // Section title
-    this.add.text(GAME_WIDTH / 2, sectionY, 'LEADERBOARD', {
+    const titleText = this.add.text(GAME_WIDTH / 2, sectionY, 'LEADERBOARD', {
       fontFamily: YAK_FONTS.title,
       fontSize: '18px',
       color: YAK_COLORS.textGold,
       stroke: '#000000',
       strokeThickness: 3,
     }).setOrigin(0.5);
+    this.inputElements.push(titleText);
 
     // Input section
     const inputY = sectionY + 35;
 
-    this.add.text(GAME_WIDTH / 2, inputY - 15, 'Enter your initials:', {
+    const instructionsText = this.add.text(GAME_WIDTH / 2, inputY - 15, 'Enter your initials:', {
       fontFamily: YAK_FONTS.body,
       fontSize: '13px',
       color: '#cbd5e1',
     }).setOrigin(0.5);
+    this.inputElements.push(instructionsText);
 
     // Input boxes
     const boxSpacing = 45;
@@ -333,6 +342,7 @@ export class ResultScene extends Phaser.Scene {
       box.fillRoundedRect(x - 18, inputY - 5, 36, 45, 8);
       box.lineStyle(2, i === 0 ? YAK_COLORS.primary : 0x475569, i === 0 ? 1 : 0.5);
       box.strokeRoundedRect(x - 18, inputY - 5, 36, 45, 8);
+      this.inputElements.push(box);
 
       // Initial text
       const initialText = this.add.text(x, inputY + 17, '_', {
@@ -342,14 +352,16 @@ export class ResultScene extends Phaser.Scene {
       }).setOrigin(0.5);
 
       this.initialTexts.push(initialText);
+      this.inputElements.push(initialText);
     }
 
     // Instructions
-    this.add.text(GAME_WIDTH / 2, inputY + 55, 'Type or tap keys below', {
+    const typeInstructions = this.add.text(GAME_WIDTH / 2, inputY + 55, 'Type or tap keys below', {
       fontFamily: YAK_FONTS.body,
       fontSize: '11px',
       color: '#64748b',
     }).setOrigin(0.5);
+    this.inputElements.push(typeInstructions);
 
     // Create on-screen keyboard
     this.createKeyboard(inputY + 80);
@@ -387,6 +399,7 @@ export class ResultScene extends Phaser.Scene {
         keyBg.fillRoundedRect(x, y, keyWidth, keyHeight, 6);
         keyBg.lineStyle(1, 0x475569, 0.8);
         keyBg.strokeRoundedRect(x, y, keyWidth, keyHeight, 6);
+        this.inputElements.push(keyBg);
 
         // Key text
         const keyText = this.add.text(x + keyWidth / 2, y + keyHeight / 2, letter, {
@@ -394,10 +407,12 @@ export class ResultScene extends Phaser.Scene {
           fontSize: letter === '←' ? '20px' : '16px',
           color: '#e2e8f0',
         }).setOrigin(0.5);
+        this.inputElements.push(keyText);
 
         // Interactive area
         const hitArea = this.add.rectangle(x + keyWidth / 2, y + keyHeight / 2, keyWidth, keyHeight, 0x000000, 0);
         hitArea.setInteractive({ useHandCursor: true });
+        this.inputElements.push(hitArea);
 
         hitArea.on('pointerover', () => {
           keyBg.clear();
@@ -509,18 +524,13 @@ export class ResultScene extends Phaser.Scene {
   }
 
   private showLeaderboard(): void {
-    // Fade out input elements
-    const inputElements = this.children.list.slice(0, -1); // All except leaderboard container
-    inputElements.forEach(child => {
-      if (child instanceof Phaser.GameObjects.Text ||
-          child instanceof Phaser.GameObjects.Graphics ||
-          child instanceof Phaser.GameObjects.Rectangle) {
-        this.tweens.add({
-          targets: child,
-          alpha: 0,
-          duration: 300,
-        });
-      }
+    // Fade out input elements using explicitly tracked elements
+    this.inputElements.forEach(element => {
+      this.tweens.add({
+        targets: element,
+        alpha: 0,
+        duration: 300,
+      });
     });
 
     // Create and show leaderboard after delay
@@ -638,18 +648,45 @@ export class ResultScene extends Phaser.Scene {
       const youLabel = this.add.text(GAME_WIDTH - 60, startY + 30 + (this.playerRank - 1) * 28, 'YOU', {
         fontFamily: YAK_FONTS.title,
         fontSize: '11px',
-        color: YAK_COLORS.primary,
+        color: '#e74c3c',
       });
       this.leaderboardContainer.add(youLabel);
     }
   }
 
-  private isMobile(): boolean {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  private reset(): void {
+    // Reset all scene state
+    this.initials = ['', '', ''];
+    this.currentInitialIndex = 0;
+    this.initialTexts = [];
+    this.inputElements = [];
+    this.hasSubmitted = false;
+    this.playerRank = 0;
+
+    // Clean up keyboard listener
+    this.input.keyboard?.off('keydown', this.handleKeyPress, this);
+
+    // Stop all tweens
+    this.tweens.killAll();
+
+    // Clear all timers
+    this.time.removeAllEvents();
   }
 
   shutdown(): void {
-    // Clean up keyboard listener
+    // Clean up event handlers
+    this.events.removeAllListeners('update');
+    this.input.removeAllListeners();
     this.input.keyboard?.off('keydown', this.handleKeyPress, this);
+    // Clean up tweens
+    this.tweens.killAll();
+    // Clean up timers
+    this.time.removeAllEvents();
+    // Clear tracked elements
+    this.inputElements = [];
+  }
+
+  private isMobile(): boolean {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   }
 }
