@@ -3,6 +3,9 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
 import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail } from '../config/theme';
 import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
+import { getCharacterQuote } from '../data/characterQuotes';
+import { createArenaAtmosphere } from '../utils/StudioAtmosphere';
+import type { CharacterId } from '../types';
 
 interface BallState {
   x: number;
@@ -830,6 +833,12 @@ export class Corner3LeftScene extends Phaser.Scene {
       ease: 'Back.easeOut',
     });
 
+    // Get character quote
+    const state = GameStateService.getState();
+    const characterId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
+    const quote = getCharacterQuote(characterId, 'success');
+    this.showCharacterQuote(quote, YAK_COLORS.success);
+
     showSuccessEffect(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, getRandomSuccess(), () => {
       this.scene.start('QuizScene');
     });
@@ -859,6 +868,12 @@ export class Corner3LeftScene extends Phaser.Scene {
       onComplete: () => rimText.destroy()
     });
 
+    // Get character quote
+    const state = GameStateService.getState();
+    const characterId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
+    const quote = getCharacterQuote(characterId, 'miss');
+    this.showCharacterQuote(quote, YAK_COLORS.danger);
+
     showFailEffect(this, this.rimCenterX, this.HOOP_Y, getRandomFail());
 
     this.time.delayedCall(700, () => this.resetBall());
@@ -869,6 +884,12 @@ export class Corner3LeftScene extends Phaser.Scene {
     this.missCount++;
     this.ui.missText.setText(`Misses: ${this.missCount}`);
     GameStateService.recordMiss('corner3_left');
+
+    // Get character quote
+    const state = GameStateService.getState();
+    const characterId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
+    const quote = getCharacterQuote(characterId, 'miss');
+    this.showCharacterQuote(quote, YAK_COLORS.danger);
 
     showFailEffect(this, this.ballState.x, Math.min(this.ballState.y, 450), getRandomFail());
 

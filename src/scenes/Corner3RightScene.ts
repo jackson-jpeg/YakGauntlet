@@ -3,6 +3,9 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
 import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail } from '../config/theme';
 import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
+import { getCharacterQuote } from '../data/characterQuotes';
+import { createArenaAtmosphere } from '../utils/StudioAtmosphere';
+import type { CharacterId } from '../types';
 
 interface BallState {
   x: number;
@@ -846,6 +849,12 @@ export class Corner3RightScene extends Phaser.Scene {
       });
     }
 
+    // Get character quote
+    const state = GameStateService.getState();
+    const characterId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
+    const quote = getCharacterQuote(characterId, 'success');
+    this.showCharacterQuote(quote, YAK_COLORS.success);
+
     showSuccessEffect(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, getRandomSuccess(), () => {
       this.scene.start('Corner3LeftScene');
     });
@@ -876,6 +885,12 @@ export class Corner3RightScene extends Phaser.Scene {
       onComplete: () => rimText.destroy()
     });
 
+    // Get character quote
+    const state = GameStateService.getState();
+    const characterId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
+    const quote = getCharacterQuote(characterId, 'miss');
+    this.showCharacterQuote(quote, YAK_COLORS.danger);
+
     showFailEffect(this, this.rimCenterX, this.HOOP_Y, getRandomFail());
 
     this.time.delayedCall(700, () => this.resetBall());
@@ -886,6 +901,12 @@ export class Corner3RightScene extends Phaser.Scene {
     this.missCount++;
     this.ui.missText.setText(`Misses: ${this.missCount}`);
     GameStateService.recordMiss('corner3_right');
+
+    // Get character quote
+    const state = GameStateService.getState();
+    const characterId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
+    const quote = getCharacterQuote(characterId, 'miss');
+    this.showCharacterQuote(quote, YAK_COLORS.danger);
 
     showFailEffect(this, this.ballState.x, Math.min(this.ballState.y, 450), getRandomFail());
 
@@ -919,6 +940,52 @@ export class Corner3RightScene extends Phaser.Scene {
 
   private getDistance(x1: number, y1: number, x2: number, y2: number): number {
     return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+  }
+
+  private showCharacterQuote(text: string, color: number): void {
+    const quoteY = GAME_HEIGHT * 0.3;
+    
+    // Quote bubble
+    const bubble = this.add.graphics();
+    bubble.fillStyle(0x1a1a1a, 0.95);
+    bubble.fillRoundedRect(GAME_WIDTH / 2 - 100, quoteY - 20, 200, 40, 12);
+    bubble.lineStyle(3, color, 1);
+    bubble.strokeRoundedRect(GAME_WIDTH / 2 - 100, quoteY - 20, 200, 40, 12);
+    bubble.setDepth(200);
+
+    // Quote text
+    const quoteText = this.add.text(GAME_WIDTH / 2, quoteY, text, {
+      fontSize: '18px',
+      fontFamily: YAK_FONTS.title,
+      color: `#${color.toString(16).padStart(6, '0')}`,
+      fontStyle: 'bold',
+      align: 'center',
+    }).setOrigin(0.5).setDepth(201);
+
+    // Animate in
+    [bubble, quoteText].forEach(obj => {
+      obj.setScale(0);
+      this.tweens.add({
+        targets: obj,
+        scale: 1,
+        duration: 200,
+        ease: 'Back.easeOut',
+      });
+    });
+
+    // Auto-hide
+    this.time.delayedCall(2000, () => {
+      this.tweens.add({
+        targets: [bubble, quoteText],
+        alpha: 0,
+        y: quoteY - 20,
+        duration: 300,
+        onComplete: () => {
+          bubble.destroy();
+          quoteText.destroy();
+        },
+      });
+    });
   }
 
   shutdown(): void {

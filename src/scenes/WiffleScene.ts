@@ -3,6 +3,9 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
 import { YAK_COLORS, YAK_FONTS, getRandomSuccess } from '../config/theme';
 import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
+import { getCharacterQuote } from '../data/characterQuotes';
+import { createStudioBackground } from '../utils/StudioAtmosphere';
+import type { CharacterId } from '../types';
 
 export class WiffleScene extends Phaser.Scene {
   // Ball
@@ -82,9 +85,12 @@ export class WiffleScene extends Phaser.Scene {
   }
 
   private createBackground(): void {
-    // Sky gradient
+    // Studio atmosphere
+    createStudioBackground(this);
+
+    // Sky gradient (over studio)
     const sky = this.add.graphics();
-    sky.fillGradientStyle(0x4a90d9, 0x4a90d9, 0x87ceeb, 0x87ceeb, 1);
+    sky.fillGradientStyle(0x4a90d9, 0x4a90d9, 0x87ceeb, 0x87ceeb, 0.7);
     sky.fillRect(0, 0, GAME_WIDTH, 480);
 
     // Clouds
@@ -447,6 +453,12 @@ export class WiffleScene extends Phaser.Scene {
     // Success text
     const hitText = quality > 0.7 ? getRandomSuccess() : 'CONTACT!';
 
+    // Get character quote
+    const state = GameStateService.getState();
+    const characterId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
+    const quote = getCharacterQuote(characterId, 'success');
+    this.showCharacterQuote(quote, YAK_COLORS.success);
+
     showSuccessEffect(this, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 50, hitText, () => {
       this.scene.start('FootballScene');
     });
@@ -456,6 +468,12 @@ export class WiffleScene extends Phaser.Scene {
     this.missCount++;
     this.ui.missText.setText(`Strikes: ${this.missCount}`);
     GameStateService.recordMiss('wiffle');
+
+    // Get character quote
+    const state = GameStateService.getState();
+    const characterId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
+    const quote = getCharacterQuote(characterId, 'miss');
+    this.showCharacterQuote(quote, YAK_COLORS.danger);
 
     showFailEffect(this, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 80, 'STRIKE!');
 
@@ -536,6 +554,52 @@ export class WiffleScene extends Phaser.Scene {
     }
 
     updateTimer(this.ui.timerText);
+  }
+
+  private showCharacterQuote(text: string, color: number): void {
+    const quoteY = GAME_HEIGHT * 0.3;
+    
+    // Quote bubble
+    const bubble = this.add.graphics();
+    bubble.fillStyle(0x1a1a1a, 0.95);
+    bubble.fillRoundedRect(GAME_WIDTH / 2 - 100, quoteY - 20, 200, 40, 12);
+    bubble.lineStyle(3, color, 1);
+    bubble.strokeRoundedRect(GAME_WIDTH / 2 - 100, quoteY - 20, 200, 40, 12);
+    bubble.setDepth(200);
+
+    // Quote text
+    const quoteText = this.add.text(GAME_WIDTH / 2, quoteY, text, {
+      fontSize: '18px',
+      fontFamily: YAK_FONTS.title,
+      color: `#${color.toString(16).padStart(6, '0')}`,
+      fontStyle: 'bold',
+      align: 'center',
+    }).setOrigin(0.5).setDepth(201);
+
+    // Animate in
+    [bubble, quoteText].forEach(obj => {
+      obj.setScale(0);
+      this.tweens.add({
+        targets: obj,
+        scale: 1,
+        duration: 200,
+        ease: 'Back.easeOut',
+      });
+    });
+
+    // Auto-hide
+    this.time.delayedCall(2000, () => {
+      this.tweens.add({
+        targets: [bubble, quoteText],
+        alpha: 0,
+        y: quoteY - 20,
+        duration: 300,
+        onComplete: () => {
+          bubble.destroy();
+          quoteText.destroy();
+        },
+      });
+    });
   }
 
   shutdown(): void {

@@ -4,6 +4,9 @@ import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail, PHYSICS } from 
 import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
 import { createConfetti, createRipple, shakeCamera, flashScreen } from '../utils/VisualEffects';
+import { getCharacterQuote } from '../data/characterQuotes';
+import { createStudioBackground } from '../utils/StudioAtmosphere';
+import type { CharacterId } from '../types';
 
 export class RunScene extends Phaser.Scene {
   // Beanbag container
@@ -80,9 +83,12 @@ export class RunScene extends Phaser.Scene {
   }
 
   private createBackground(): void {
-    // Sky gradient
+    // Studio atmosphere for Yak feel
+    createStudioBackground(this);
+
+    // Sky gradient (over studio background)
     const skyGradient = this.add.graphics();
-    skyGradient.fillGradientStyle(0x87ceeb, 0x87ceeb, 0x4a90d9, 0x4a90d9, 1);
+    skyGradient.fillGradientStyle(0x87ceeb, 0x87ceeb, 0x4a90d9, 0x4a90d9, 0.7);
     skyGradient.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT - 100);
 
     // Clouds
@@ -461,6 +467,12 @@ export class RunScene extends Phaser.Scene {
       duration: 250
     });
 
+    // Get character quote
+    const state = GameStateService.getState();
+    const characterId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
+    const quote = getCharacterQuote(characterId, 'success');
+    this.showCharacterQuote(quote, YAK_COLORS.success);
+
     // Success effect
     showSuccessEffect(this, this.holeX, this.holeY, getRandomSuccess(), () => {
       this.scene.start('GoalieScene');
@@ -479,6 +491,12 @@ export class RunScene extends Phaser.Scene {
       endRadius: 60,
       duration: 400,
     });
+
+    // Get character quote
+    const state = GameStateService.getState();
+    const characterId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
+    const quote = getCharacterQuote(characterId, 'miss');
+    this.showCharacterQuote(quote, YAK_COLORS.danger);
 
     showFailEffect(this, this.bagContainer.x, this.bagContainer.y, getRandomFail());
 
@@ -501,6 +519,52 @@ export class RunScene extends Phaser.Scene {
 
     this.instructionText.setVisible(true);
     this.instructionText.setText('DRAG TO AIM & THROW');
+  }
+
+  private showCharacterQuote(text: string, color: number): void {
+    const quoteY = GAME_HEIGHT * 0.3;
+    
+    // Quote bubble
+    const bubble = this.add.graphics();
+    bubble.fillStyle(0x1a1a1a, 0.95);
+    bubble.fillRoundedRect(GAME_WIDTH / 2 - 100, quoteY - 20, 200, 40, 12);
+    bubble.lineStyle(3, color, 1);
+    bubble.strokeRoundedRect(GAME_WIDTH / 2 - 100, quoteY - 20, 200, 40, 12);
+    bubble.setDepth(200);
+
+    // Quote text
+    const quoteText = this.add.text(GAME_WIDTH / 2, quoteY, text, {
+      fontSize: '18px',
+      fontFamily: YAK_FONTS.title,
+      color: `#${color.toString(16).padStart(6, '0')}`,
+      fontStyle: 'bold',
+      align: 'center',
+    }).setOrigin(0.5).setDepth(201);
+
+    // Animate in
+    [bubble, quoteText].forEach(obj => {
+      obj.setScale(0);
+      this.tweens.add({
+        targets: obj,
+        scale: 1,
+        duration: 200,
+        ease: 'Back.easeOut',
+      });
+    });
+
+    // Auto-hide
+    this.time.delayedCall(2000, () => {
+      this.tweens.add({
+        targets: [bubble, quoteText],
+        alpha: 0,
+        y: quoteY - 20,
+        duration: 300,
+        onComplete: () => {
+          bubble.destroy();
+          quoteText.destroy();
+        },
+      });
+    });
   }
 
   update(): void {

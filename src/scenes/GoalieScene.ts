@@ -4,6 +4,9 @@ import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail, PHYSICS } from 
 import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
 import { createConfetti, flashScreen, shakeCamera } from '../utils/VisualEffects';
+import { createGoalieSprite } from '../utils/CharacterSprites';
+import { getCharacterQuote, getCharacterName } from '../data/characterQuotes';
+import { CHARACTER_MODIFIERS } from '../types';
 
 export class GoalieScene extends Phaser.Scene {
   // Ball
@@ -15,6 +18,8 @@ export class GoalieScene extends Phaser.Scene {
   private goalieDirection = 1;
   private goalieSpeed = 2.5;
   private goalieBobOffset = 0;
+  private goalieCharacterId!: string;
+  private goalieQuoteText!: Phaser.GameObjects.Text;
 
   // Goal dimensions
   private goalLeft = 70;
@@ -55,6 +60,10 @@ export class GoalieScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Get goalie character from state
+    const state = GameStateService.getState();
+    this.goalieCharacterId = state?.goalieCharacterId || 'BIG_CAT';
+
     this.createBackground();
     this.createStadium();
 
@@ -65,6 +74,7 @@ export class GoalieScene extends Phaser.Scene {
     this.createGoal();
     this.createGoalie();
     this.createBall();
+    this.createGoalieNameplate();
 
     // Unified UI header (station 1 = goalie/penalty)
     this.ui = createSceneUI(this, 1, 'Saves');
@@ -254,69 +264,58 @@ export class GoalieScene extends Phaser.Scene {
   }
 
   private createGoalie(): void {
-    this.goalie = this.add.container(GAME_WIDTH / 2, 370);
-    this.goalie.setDepth(20);
+    // Use character sprite system
+    this.goalie = createGoalieSprite(
+      this,
+      this.goalieCharacterId as any,
+      GAME_WIDTH / 2,
+      370
+    );
 
-    // Shadow
-    const shadow = this.add.ellipse(0, 55, 60, 20, 0x000000, 0.3);
+    // Apply character modifiers
+    const modifiers = CHARACTER_MODIFIERS[this.goalieCharacterId as any];
+    if (modifiers) {
+      this.goalieSpeed = 2.5 * modifiers.goalieSpeedMultiplier;
+      // Width multiplier applied in collision detection
+    }
+  }
 
-    // Legs
-    const leftLeg = this.add.rectangle(-10, 40, 16, 40, 0x1a1a1a);
-    const rightLeg = this.add.rectangle(10, 40, 16, 40, 0x1a1a1a);
+  private createGoalieNameplate(): void {
+    const nameplateY = 180;
+    
+    // Nameplate background
+    const nameplate = this.add.graphics();
+    nameplate.fillStyle(0x000000, 0.8);
+    nameplate.fillRoundedRect(GAME_WIDTH / 2 - 80, nameplateY - 20, 160, 40, 8);
+    nameplate.lineStyle(2, YAK_COLORS.secondary, 0.8);
+    nameplate.strokeRoundedRect(GAME_WIDTH / 2 - 80, nameplateY - 20, 160, 40, 8);
+    nameplate.setDepth(25);
 
-    // Shorts
-    const shorts = this.add.rectangle(0, 22, 36, 24, 0x1a1a1a);
-
-    // Jersey - Yak gold
-    const jersey = this.add.rectangle(0, -5, 50, 50, YAK_COLORS.secondary);
-    jersey.setStrokeStyle(2, YAK_COLORS.secondaryDark);
-
-    // Jersey detail
-    const jerseyDetail = this.add.graphics();
-    jerseyDetail.fillStyle(0x000000, 0.2);
-    jerseyDetail.fillRect(-25, -30, 50, 10);
-
-    // Number
-    const number = this.add.text(0, -5, '1', {
-      fontSize: '28px',
+    // Goalie name
+    const goalieName = getCharacterName(this.goalieCharacterId as any);
+    const nameText = this.add.text(GAME_WIDTH / 2, nameplateY, goalieName, {
+      fontSize: '18px',
       fontFamily: YAK_FONTS.title,
-      color: '#1a1a1a'
-    }).setOrigin(0.5);
+      color: '#f1c40f',
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(26);
 
-    // Arms
-    const leftArm = this.add.rectangle(-35, -5, 22, 45, YAK_COLORS.secondary);
-    leftArm.setStrokeStyle(2, YAK_COLORS.secondaryDark);
-    leftArm.setAngle(-15);
+    // "IN GOAL" label
+    const label = this.add.text(GAME_WIDTH / 2, nameplateY + 18, 'IN GOAL', {
+      fontSize: '12px',
+      fontFamily: YAK_FONTS.body,
+      color: '#9ca3af',
+    }).setOrigin(0.5).setDepth(26);
 
-    const rightArm = this.add.rectangle(35, -5, 22, 45, YAK_COLORS.secondary);
-    rightArm.setStrokeStyle(2, YAK_COLORS.secondaryDark);
-    rightArm.setAngle(15);
-
-    // Gloves - Yak red
-    const leftGlove = this.add.rectangle(-42, -28, 20, 22, YAK_COLORS.primary);
-    leftGlove.setStrokeStyle(2, YAK_COLORS.primaryDark);
-    const rightGlove = this.add.rectangle(42, -28, 20, 22, YAK_COLORS.primary);
-    rightGlove.setStrokeStyle(2, YAK_COLORS.primaryDark);
-
-    // Head
-    const head = this.add.circle(0, -42, 18, 0xffdbac);
-    head.setStrokeStyle(2, 0xe6c89c);
-
-    // Hair
-    const hair = this.add.ellipse(0, -52, 30, 16, 0x4a3728);
-
-    // Face
-    const face = this.add.graphics();
-    face.fillStyle(0x1a1a1a, 1);
-    face.fillCircle(-6, -44, 2);
-    face.fillCircle(6, -44, 2);
-    face.lineStyle(2, 0x1a1a1a, 1);
-    face.beginPath();
-    face.arc(0, -38, 6, 0.2, Math.PI - 0.2, false);
-    face.strokePath();
-
-    this.goalie.add([shadow, leftLeg, rightLeg, shorts, jersey, jerseyDetail, number,
-                     leftArm, rightArm, leftGlove, rightGlove, head, hair, face]);
+    // Pulse animation
+    this.tweens.add({
+      targets: nameplate,
+      alpha: 0.9,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
   }
 
   private createBall(): void {
@@ -584,6 +583,15 @@ export class GoalieScene extends Phaser.Scene {
       height: 250,
     });
 
+    // Goalie reaction (disappointed)
+    this.tweens.add({
+      targets: this.goalie,
+      y: this.goalie.y + 5,
+      rotation: 0.1,
+      duration: 300,
+      yoyo: true,
+    });
+
     this.tweens.add({
       targets: this.ballContainer,
       y: this.ballContainer.y + 40,
@@ -614,8 +622,83 @@ export class GoalieScene extends Phaser.Scene {
       });
     }
 
+    // Show character quote (taunt on goal scored)
+    const quote = getCharacterQuote(this.goalieCharacterId as any, 'taunt');
+    this.showGoalieQuote(quote, YAK_COLORS.danger);
+
     showSuccessEffect(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, 'GOAL!', () => {
       this.scene.start('WiffleScene');
+    });
+  }
+
+  private showGoalieQuote(text: string, color: number): void {
+    // Remove previous quote if exists
+    if (this.goalieQuoteText) {
+      this.goalieQuoteText.destroy();
+    }
+
+    // Create quote bubble above goalie
+    const quoteY = this.goalie.y - 80;
+    const bubble = this.add.graphics();
+    bubble.fillStyle(0x1a1a1a, 0.95);
+    bubble.fillRoundedRect(GAME_WIDTH / 2 - 100, quoteY - 20, 200, 40, 12);
+    bubble.lineStyle(3, color, 1);
+    bubble.strokeRoundedRect(GAME_WIDTH / 2 - 100, quoteY - 20, 200, 40, 12);
+    bubble.setDepth(200);
+
+    // Quote text
+    this.goalieQuoteText = this.add.text(GAME_WIDTH / 2, quoteY, text, {
+      fontSize: '16px',
+      fontFamily: YAK_FONTS.title,
+      color: `#${color.toString(16).padStart(6, '0')}`,
+      fontStyle: 'bold',
+      align: 'center',
+    }).setOrigin(0.5).setDepth(201);
+
+    // Speech bubble tail
+    const tail = this.add.graphics();
+    tail.fillStyle(0x1a1a1a, 0.95);
+    tail.fillTriangle(
+      GAME_WIDTH / 2 - 15, quoteY + 20,
+      GAME_WIDTH / 2 + 15, quoteY + 20,
+      GAME_WIDTH / 2, quoteY + 35
+    );
+    tail.lineStyle(3, color, 1);
+    tail.beginPath();
+    tail.moveTo(GAME_WIDTH / 2 - 15, quoteY + 20);
+    tail.lineTo(GAME_WIDTH / 2, quoteY + 35);
+    tail.lineTo(GAME_WIDTH / 2 + 15, quoteY + 20);
+    tail.closePath();
+    tail.strokePath();
+    tail.setDepth(200);
+
+    // Animate in
+    [bubble, this.goalieQuoteText, tail].forEach(obj => {
+      obj.setScale(0);
+      this.tweens.add({
+        targets: obj,
+        scale: 1,
+        duration: 200,
+        ease: 'Back.easeOut',
+      });
+    });
+
+    // Auto-hide after delay
+    this.time.delayedCall(2000, () => {
+      this.tweens.add({
+        targets: [bubble, this.goalieQuoteText, tail],
+        alpha: 0,
+        y: quoteY - 20,
+        duration: 300,
+        onComplete: () => {
+          bubble.destroy();
+          tail.destroy();
+          if (this.goalieQuoteText) {
+            this.goalieQuoteText.destroy();
+            this.goalieQuoteText = undefined as any;
+          }
+        },
+      });
     });
   }
 
@@ -624,7 +707,7 @@ export class GoalieScene extends Phaser.Scene {
     this.ui.missText.setText(`Saves: ${this.missCount}`);
     GameStateService.recordMiss('goalie');
 
-    // Goalie dive
+    // Goalie dive animation
     const diveDir = this.ballContainer.x < GAME_WIDTH / 2 ? -1 : 1;
     this.tweens.add({
       targets: this.goalie,
@@ -643,6 +726,10 @@ export class GoalieScene extends Phaser.Scene {
       duration: 600,
       ease: 'Bounce.easeOut'
     });
+
+    // Show character quote
+    const quote = getCharacterQuote(this.goalieCharacterId as any, 'save');
+    this.showGoalieQuote(quote, YAK_COLORS.secondary);
 
     showFailEffect(this, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 80, 'SAVED!');
 

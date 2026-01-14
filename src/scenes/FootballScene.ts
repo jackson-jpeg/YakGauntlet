@@ -3,6 +3,9 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
 import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail } from '../config/theme';
 import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
+import { getCharacterQuote } from '../data/characterQuotes';
+import { createArenaAtmosphere } from '../utils/StudioAtmosphere';
+import type { CharacterId } from '../types';
 
 export class FootballScene extends Phaser.Scene {
   // Football
@@ -83,9 +86,12 @@ export class FootballScene extends Phaser.Scene {
   }
 
   private createBackground(): void {
-    // Stadium night sky
+    // Arena atmosphere
+    createArenaAtmosphere(this);
+
+    // Stadium night sky (over arena)
     const sky = this.add.graphics();
-    sky.fillGradientStyle(0x0f172a, 0x0f172a, 0x1e3a5f, 0x1e3a5f, 1);
+    sky.fillGradientStyle(0x0f172a, 0x0f172a, 0x1e3a5f, 0x1e3a5f, 0.8);
     sky.fillRect(0, 0, GAME_WIDTH, 350);
 
     // Stadium lights
@@ -577,6 +583,12 @@ export class FootballScene extends Phaser.Scene {
       repeat: 2,
     });
 
+    // Get character quote
+    const state = GameStateService.getState();
+    const characterId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
+    const quote = getCharacterQuote(characterId, 'success');
+    this.showCharacterQuote(quote, YAK_COLORS.success);
+
     showSuccessEffect(this, this.targetX, this.targetY, getRandomSuccess(), () => {
       this.scene.start('Corner3RightScene');
     });
@@ -609,6 +621,12 @@ export class FootballScene extends Phaser.Scene {
       onComplete: () => flash.destroy()
     });
 
+    // Get character quote
+    const state = GameStateService.getState();
+    const characterId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
+    const quote = getCharacterQuote(characterId, 'miss');
+    this.showCharacterQuote(quote, YAK_COLORS.danger);
+
     showFailEffect(this, this.targetX, this.targetY - 60, 'OFF THE RIM!');
 
     this.time.delayedCall(800, () => this.resetFootball());
@@ -618,6 +636,12 @@ export class FootballScene extends Phaser.Scene {
     this.missCount++;
     this.ui.missText.setText(`Misses: ${this.missCount}`);
     GameStateService.recordMiss('football');
+
+    // Get character quote
+    const state = GameStateService.getState();
+    const characterId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
+    const quote = getCharacterQuote(characterId, 'miss');
+    this.showCharacterQuote(quote, YAK_COLORS.danger);
 
     showFailEffect(this, this.football.x, Math.min(this.football.y, 400), getRandomFail());
 
@@ -640,6 +664,52 @@ export class FootballScene extends Phaser.Scene {
 
     this.instructionText.setVisible(true);
     this.instructionText.setText('DRAG TO THROW');
+  }
+
+  private showCharacterQuote(text: string, color: number): void {
+    const quoteY = GAME_HEIGHT * 0.3;
+    
+    // Quote bubble
+    const bubble = this.add.graphics();
+    bubble.fillStyle(0x1a1a1a, 0.95);
+    bubble.fillRoundedRect(GAME_WIDTH / 2 - 100, quoteY - 20, 200, 40, 12);
+    bubble.lineStyle(3, color, 1);
+    bubble.strokeRoundedRect(GAME_WIDTH / 2 - 100, quoteY - 20, 200, 40, 12);
+    bubble.setDepth(200);
+
+    // Quote text
+    const quoteText = this.add.text(GAME_WIDTH / 2, quoteY, text, {
+      fontSize: '18px',
+      fontFamily: YAK_FONTS.title,
+      color: `#${color.toString(16).padStart(6, '0')}`,
+      fontStyle: 'bold',
+      align: 'center',
+    }).setOrigin(0.5).setDepth(201);
+
+    // Animate in
+    [bubble, quoteText].forEach(obj => {
+      obj.setScale(0);
+      this.tweens.add({
+        targets: obj,
+        scale: 1,
+        duration: 200,
+        ease: 'Back.easeOut',
+      });
+    });
+
+    // Auto-hide
+    this.time.delayedCall(2000, () => {
+      this.tweens.add({
+        targets: [bubble, quoteText],
+        alpha: 0,
+        y: quoteY - 20,
+        duration: 300,
+        onComplete: () => {
+          bubble.destroy();
+          quoteText.destroy();
+        },
+      });
+    });
   }
 
   update(): void {

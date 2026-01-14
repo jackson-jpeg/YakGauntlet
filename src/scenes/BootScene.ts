@@ -4,6 +4,8 @@ import { getFirestore } from 'firebase/firestore';
 import { firebaseConfig } from '../config/firebaseConfig';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
 import { YAK_COLORS, YAK_FONTS, STATIONS } from '../config/theme';
+import { GameStateService } from '../services/GameStateService';
+import { getCharacterName } from '../data/characterQuotes';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -40,19 +42,22 @@ export class BootScene extends Phaser.Scene {
   // --- VISUAL SETUP ---
 
   private createStudioBackground(): void {
-    // Dark Vignette Background
+    // Dark Studio Background with gradient
     const bg = this.add.graphics();
-    bg.fillGradientStyle(0x1a1a1a, 0x1a1a1a, 0x000000, 0x000000, 1);
+    bg.fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x0f0f1e, 0x000000, 1);
     bg.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+    // Studio ceiling with lights
+    this.createStudioLights();
 
     // Parquet Floor Pattern (The "Studio" Look)
     const floorGraphics = this.add.graphics();
-    floorGraphics.lineStyle(2, 0x333333, 0.3);
+    floorGraphics.lineStyle(2, 0x2a2a2a, 0.4);
     
     const tileSize = 60;
     // Draw angled parquet lines
     for (let x = -GAME_WIDTH; x < GAME_WIDTH * 2; x += tileSize) {
-      for (let y = -GAME_HEIGHT; y < GAME_HEIGHT * 2; y += tileSize) {
+      for (let y = GAME_HEIGHT * 0.6; y < GAME_HEIGHT * 2; y += tileSize) {
          // Zig zag pattern
          if ((Math.floor(x/tileSize) + Math.floor(y/tileSize)) % 2 === 0) {
              floorGraphics.lineBetween(x, y, x + tileSize, y + tileSize);
@@ -61,38 +66,128 @@ export class BootScene extends Phaser.Scene {
          }
       }
     }
+
+    // Studio floor shine
+    const floorShine = this.add.graphics();
+    floorShine.fillGradientStyle(0xffffff, 0xffffff, 0x000000, 0x000000, 1);
+    floorShine.fillRect(0, GAME_HEIGHT * 0.6, GAME_WIDTH, GAME_HEIGHT * 0.4);
+    floorShine.setAlpha(0.05);
     
     // Add a spotlight effect in the center
-    const spotlight = this.add.circle(GAME_WIDTH/2, GAME_HEIGHT/2 - 100, 300, 0xffffff, 0.05);
+    const spotlight = this.add.circle(GAME_WIDTH/2, GAME_HEIGHT/2 - 100, 350, 0xffffff, 0.08);
     this.tweens.add({
       targets: spotlight,
-      alpha: 0.08,
-      scale: 1.1,
+      alpha: 0.12,
+      scale: 1.15,
       duration: 3000,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut'
     });
+
+    // Studio equipment silhouettes (cameras, stands)
+    this.createStudioEquipment();
+  }
+
+  private createStudioLights(): void {
+    // Studio light rigs
+    for (let i = 0; i < 4; i++) {
+      const x = 80 + i * (GAME_WIDTH - 160) / 3;
+      const y = 60;
+
+      // Light fixture
+      const fixture = this.add.rectangle(x, y, 40, 15, 0x2a2a2a);
+      fixture.setStrokeStyle(2, 0x3a3a3a);
+
+      // Light glow
+      const glow = this.add.circle(x, y, 25, 0xfef3c7, 0.3);
+      this.tweens.add({
+        targets: glow,
+        alpha: 0.5,
+        scale: 1.2,
+        duration: 2000,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+
+      // Light beam
+      const beam = this.add.graphics();
+      beam.fillStyle(0xfef3c7, 0.1);
+      beam.fillTriangle(x - 30, y + 10, x + 30, y + 10, x, GAME_HEIGHT * 0.6);
+    }
+  }
+
+  private createStudioEquipment(): void {
+    // Camera silhouettes on sides
+    const leftCamera = this.add.container(40, GAME_HEIGHT * 0.7);
+    const camBody = this.add.rectangle(0, 0, 30, 20, 0x1a1a1a);
+    const camLens = this.add.circle(15, 0, 8, 0x0a0a0a);
+    const camStand = this.add.rectangle(0, 15, 4, 40, 0x2a2a2a);
+    leftCamera.add([camStand, camBody, camLens]);
+    leftCamera.setAlpha(0.6);
+
+    const rightCamera = this.add.container(GAME_WIDTH - 40, GAME_HEIGHT * 0.7);
+    const camBody2 = this.add.rectangle(0, 0, 30, 20, 0x1a1a1a);
+    const camLens2 = this.add.circle(-15, 0, 8, 0x0a0a0a);
+    const camStand2 = this.add.rectangle(0, 15, 4, 40, 0x2a2a2a);
+    rightCamera.add([camStand2, camBody2, camLens2]);
+    rightCamera.setAlpha(0.6);
+
+    // Microphone stands
+    for (let i = 0; i < 3; i++) {
+      const x = 120 + i * (GAME_WIDTH - 240) / 2;
+      const y = GAME_HEIGHT * 0.75;
+      const stand = this.add.rectangle(x, y, 3, 60, 0x2a2a2a);
+      const mic = this.add.circle(x, y - 30, 6, 0x1a1a1a);
+      mic.setStrokeStyle(1, 0x3a3a3a);
+      stand.setAlpha(0.5);
+      mic.setAlpha(0.5);
+    }
   }
 
   private createAttractMode(): void {
-    // Spawns random "flickable" objects falling in the background
-    const particles = this.add.particles(0, 0, 'basketball', {
-        x: { min: 0, max: GAME_WIDTH },
-        y: -50,
-        lifespan: 4000,
-        speedY: { min: 200, max: 400 },
-        speedX: { min: -50, max: 50 },
-        scale: { min: 0.5, max: 0.8 },
-        rotate: { min: -180, max: 180 },
-        quantity: 1,
-        frequency: 800, // Spawn every 800ms
-        alpha: 0.3, // Subtle
-        blendMode: 'ADD'
+    // Spawns random "flickable" objects falling in the background - Yak style chaos
+    const textures = ['basketball', 'beanbag', 'soccerball', 'wiffleball'];
+    
+    textures.forEach((texture, index) => {
+      this.time.delayedCall(index * 200, () => {
+        const particles = this.add.particles(0, 0, texture, {
+          x: { min: 0, max: GAME_WIDTH },
+          y: -50,
+          lifespan: 4000,
+          speedY: { min: 200, max: 400 },
+          speedX: { min: -50, max: 50 },
+          scale: { min: 0.4, max: 0.7 },
+          rotate: { min: -180, max: 180 },
+          quantity: 1,
+          frequency: 1200,
+          alpha: 0.25,
+          blendMode: 'ADD'
+        });
+      });
     });
 
-    // We can also emit beanbags using a separate emitter or just mix textures if using a frame-based texture atlas
-    // For now, basketballs raining down looks cool.
+    // Studio "energy" particles (subtle sparkles)
+    for (let i = 0; i < 20; i++) {
+      const sparkle = this.add.circle(
+        Math.random() * GAME_WIDTH,
+        Math.random() * GAME_HEIGHT * 0.6,
+        Math.random() * 2 + 1,
+        0xf1c40f,
+        0.3
+      );
+      
+      this.tweens.add({
+        targets: sparkle,
+        y: sparkle.y + 100,
+        alpha: 0,
+        duration: 2000 + Math.random() * 2000,
+        repeat: -1,
+        delay: Math.random() * 2000,
+        yoyo: true,
+      });
+    }
   }
 
   private createLogo(): void {
@@ -207,33 +302,55 @@ export class BootScene extends Phaser.Scene {
   }
 
   private createNewsTicker(): void {
-    // A black bar at the bottom
-    const bar = this.add.rectangle(GAME_WIDTH/2, GAME_HEIGHT - 25, GAME_WIDTH, 50, 0x000000, 0.9);
+    // Enhanced ticker bar with gradient
+    const bar = this.add.graphics();
+    bar.fillGradientStyle(0x000000, 0x000000, 0x1a1a1a, 0x1a1a1a, 1);
+    bar.fillRect(0, GAME_HEIGHT - 50, GAME_WIDTH, 50);
+    bar.lineStyle(2, YAK_COLORS.secondary, 0.3);
+    bar.moveTo(0, GAME_HEIGHT - 50);
+    bar.lineTo(GAME_WIDTH, GAME_HEIGHT - 50);
+    bar.strokePath();
     
-    // Fake stats
+    // Top border glow
+    const topGlow = this.add.rectangle(GAME_WIDTH/2, GAME_HEIGHT - 50, GAME_WIDTH, 2, YAK_COLORS.secondary, 0.5);
+    
+    // Dynamic headlines with more Yak personality
+    // Initialize a run to get goalie name
+    const tempState = GameStateService.getState();
+    if (!tempState) {
+      GameStateService.initNewRun();
+    }
+    const state = GameStateService.getState();
+    const goalieName = state?.goalieCharacterId ? getCharacterName(state.goalieCharacterId) : 'BIG CAT';
+    
     const headlines = [
-        "CURRENT KING: DAN - 45.2s",
-        "WORST RUN: TANK - 120.0s (WET)",
-        "TODAY'S GOALIE: BIG CAT",
-        "DATA DAY PROJECTION: 98% CHANCE OF CHAOS",
-        "DON'T SAY LIST: [REDACTED]",
-        "10X TIME ALERT IN EFFECT"
+        "⚡ CURRENT KING: DAN - 45.2s ⚡",
+        "💧 WORST RUN: TANK - 120.0s (WET) 💧",
+        `🥅 TODAY'S GOALIE: ${goalieName}`,
+        "📊 DATA DAY PROJECTION: 98% CHAOS",
+        "🚫 DON'T SAY LIST: [REDACTED]",
+        "⏰ 10X TIME ALERT IN EFFECT",
+        "🎯 GAUNTLET STATUS: ACTIVE",
+        "🔥 STREAK RECORD: 6 PERFECT STATIONS"
     ];
     
-    const fullText = headlines.join("   ///   ") + "   ///   ";
+    const fullText = headlines.join("   ▸   ") + "   ▸   ";
     
     const ticker = this.add.text(GAME_WIDTH, GAME_HEIGHT - 25, fullText, {
-        fontFamily: 'Courier New', // Monospace for data vibe
-        fontSize: '18px',
-        color: '#00ff00' // Terminal green
+        fontFamily: 'Courier New',
+        fontSize: '16px',
+        color: '#00ff00',
+        fontStyle: 'bold'
     }).setOrigin(0, 0.5);
 
-    // Scroll it
-    const speed = 2; // px per frame
+    // Scroll it with variable speed
+    let speed = 2.5;
     this.events.on('update', () => {
         ticker.x -= speed;
         if (ticker.x < -ticker.width) {
             ticker.x = GAME_WIDTH;
+            // Occasionally speed up for "breaking news"
+            speed = Math.random() > 0.8 ? 4 : 2.5;
         }
     });
   }
