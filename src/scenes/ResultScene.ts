@@ -550,6 +550,26 @@ export class ResultScene extends Phaser.Scene {
       repeat: -1,
     });
 
+    // Helpful hint below the input
+    const hintText = this.add.text(GAME_WIDTH / 2, inputY + 65, 'Complete to see the leaderboard', {
+      fontFamily: YAK_FONTS.body,
+      fontSize: '12px',
+      color: '#64748b',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5);
+    this.inputElements.push(hintText);
+
+    // Subtle pulse on hint
+    this.tweens.add({
+      targets: hintText,
+      alpha: 0.5,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
     // Create leaderboard display (hidden initially)
     this.leaderboardContainer = this.add.container(0, 0);
     this.leaderboardContainer.setVisible(false);
@@ -679,13 +699,20 @@ export class ResultScene extends Phaser.Scene {
         targets: element,
         alpha: 0,
         duration: 300,
+        onComplete: () => {
+          // Destroy to free memory
+          if (element && element.destroy) {
+            element.destroy();
+          }
+        }
       });
     });
 
-    // Create and show leaderboard after delay
+    // Create and show leaderboard after delay - positioned where input was
     this.time.delayedCall(400, () => {
       // Now create the leaderboard with fresh data including the new entry
-      this.createLeaderboardDisplay(705);
+      // Position to fit on screen nicely (775 title, 795 header, 805+ entries = ~955 max)
+      this.createLeaderboardDisplay(770);
 
       this.leaderboardContainer.setVisible(true);
       this.leaderboardContainer.setAlpha(0);
@@ -698,54 +725,78 @@ export class ResultScene extends Phaser.Scene {
   }
 
   private createLeaderboardDisplay(startY: number): void {
-    const entries = LeaderboardService.getTopEntries(6);
+    const entries = LeaderboardService.getTopEntries(5);
 
     if (entries.length === 0) {
-      const noScores = this.add.text(GAME_WIDTH / 2, startY + 30, 'No scores yet!\nBe the first on the board!', {
-        fontFamily: YAK_FONTS.body,
-        fontSize: '14px',
-        color: '#94a3b8',
+      const noScores = this.add.text(GAME_WIDTH / 2, startY + 40, 'No scores yet!\nBe the first on the board!', {
+        fontFamily: YAK_FONTS.title,
+        fontSize: '16px',
+        color: YAK_COLORS.textGold,
         align: 'center',
+        stroke: '#000000',
+        strokeThickness: 3,
       }).setOrigin(0.5);
       this.leaderboardContainer.add(noScores);
       return;
     }
 
-    // Header
+    // Title above the list
+    const title = this.add.text(GAME_WIDTH / 2, startY - 15, 'TOP SCORES', {
+      fontFamily: YAK_FONTS.title,
+      fontSize: '18px',
+      color: YAK_COLORS.textGold,
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5);
+    this.leaderboardContainer.add(title);
+
+    // Header background with Yak styling
     const header = this.add.graphics();
-    header.fillStyle(0x1e293b, 0.8);
-    header.fillRect(40, startY - 5, GAME_WIDTH - 80, 22);
+    header.fillStyle(YAK_COLORS.bgDark, 0.9);
+    header.fillRoundedRect(30, startY + 5, GAME_WIDTH - 60, 24, 6);
+    header.lineStyle(2, YAK_COLORS.secondary, 0.5);
+    header.strokeRoundedRect(30, startY + 5, GAME_WIDTH - 60, 24, 6);
 
     const headerText = [
-      { text: 'RANK', x: 60 },
-      { text: 'NAME', x: 140 },
-      { text: 'TIME', x: 280 },
-      { text: 'STATUS', x: 400 },
+      { text: 'RANK', x: 55 },
+      { text: 'NAME', x: 135 },
+      { text: 'TIME', x: 270 },
+      { text: 'STATUS', x: 390 },
     ];
 
     headerText.forEach(({ text, x }) => {
-      const label = this.add.text(x, startY + 3, text, {
+      const label = this.add.text(x, startY + 12, text, {
         fontFamily: YAK_FONTS.title,
-        fontSize: '11px',
-        color: '#64748b',
+        fontSize: '12px',
+        color: YAK_COLORS.textGold,
+        stroke: '#000000',
+        strokeThickness: 2,
       });
       this.leaderboardContainer.add(label);
     });
 
     this.leaderboardContainer.add(header);
 
-    // Entries
+    // Entries - with animation
     entries.forEach((entry, index) => {
-      const y = startY + 30 + index * 28;
+      const y = startY + 40 + index * 30;
       const isPlayer = this.playerRank === index + 1;
 
-      // Row background
+      // Row background with subtle stripe
+      const rowBg = this.add.graphics();
+      if (index % 2 === 0) {
+        rowBg.fillStyle(0x000000, 0.15);
+        rowBg.fillRoundedRect(30, y - 12, GAME_WIDTH - 60, 28, 5);
+      }
+      this.leaderboardContainer.add(rowBg);
+
+      // Highlight for player's score
       if (isPlayer) {
         const highlight = this.add.graphics();
-        highlight.fillStyle(YAK_COLORS.primary, 0.2);
-        highlight.fillRoundedRect(35, y - 10, GAME_WIDTH - 70, 26, 5);
-        highlight.lineStyle(2, YAK_COLORS.primary, 0.6);
-        highlight.strokeRoundedRect(35, y - 10, GAME_WIDTH - 70, 26, 5);
+        highlight.fillStyle(YAK_COLORS.primary, 0.25);
+        highlight.fillRoundedRect(30, y - 12, GAME_WIDTH - 60, 28, 5);
+        highlight.lineStyle(2, YAK_COLORS.secondary, 0.9);
+        highlight.strokeRoundedRect(30, y - 12, GAME_WIDTH - 60, 28, 5);
         this.leaderboardContainer.add(highlight);
       }
 
@@ -760,45 +811,92 @@ export class ResultScene extends Phaser.Scene {
         rankText = '🥉';
       }
 
-      const rank = this.add.text(60, y, rankText, {
+      const rank = this.add.text(55, y, rankText, {
         fontFamily: YAK_FONTS.title,
-        fontSize: '14px',
+        fontSize: '16px',
         color: rankColor,
-      });
+      }).setOrigin(0, 0.5);
 
       // Name
-      const name = this.add.text(140, y, entry.username, {
+      const name = this.add.text(135, y, entry.username, {
         fontFamily: YAK_FONTS.mono,
-        fontSize: '16px',
-        color: isPlayer ? YAK_COLORS.textGold : '#e2e8f0',
+        fontSize: '17px',
+        color: isPlayer ? YAK_COLORS.textGold : '#ffffff',
         fontStyle: isPlayer ? 'bold' : 'normal',
-      });
+        stroke: '#000000',
+        strokeThickness: isPlayer ? 3 : 2,
+      }).setOrigin(0, 0.5);
 
       // Time
       const timeSeconds = (entry.time_ms / 1000).toFixed(2);
-      const time = this.add.text(280, y, `${timeSeconds}s`, {
+      const time = this.add.text(270, y, `${timeSeconds}s`, {
         fontFamily: YAK_FONTS.mono,
-        fontSize: '14px',
-        color: entry.wet ? '#ef4444' : '#4ade80',
-      });
+        fontSize: '15px',
+        color: entry.wet ? YAK_COLORS.textRed : YAK_COLORS.textGreen,
+        stroke: '#000000',
+        strokeThickness: 2,
+      }).setOrigin(0, 0.5);
 
       // Status
-      const status = this.add.text(400, y, entry.wet ? 'WET' : 'DRY', {
+      const status = this.add.text(390, y, entry.wet ? 'WET' : 'DRY', {
         fontFamily: YAK_FONTS.title,
-        fontSize: '12px',
-        color: entry.wet ? '#ef4444' : '#4ade80',
+        fontSize: '13px',
+        color: entry.wet ? YAK_COLORS.textRed : YAK_COLORS.textGreen,
+        stroke: '#000000',
+        strokeThickness: 2,
+      }).setOrigin(0, 0.5);
+
+      // Animate entry in with stagger
+      const allElements = [rowBg, rank, name, time, status];
+      if (isPlayer) {
+        // Highlight is already in container
+      }
+
+      allElements.forEach(el => {
+        el.setAlpha(0);
+        this.tweens.add({
+          targets: el,
+          alpha: 1,
+          duration: 300,
+          delay: 100 + index * 80,
+          ease: 'Power2'
+        });
       });
 
       this.leaderboardContainer.add([rank, name, time, status]);
     });
 
     // "You" indicator for player
-    if (this.playerRank > 0 && this.playerRank <= 6) {
-      const youLabel = this.add.text(GAME_WIDTH - 60, startY + 30 + (this.playerRank - 1) * 28, 'YOU', {
+    if (this.playerRank > 0 && this.playerRank <= 5) {
+      const youY = startY + 40 + (this.playerRank - 1) * 30;
+      const youLabel = this.add.text(GAME_WIDTH - 55, youY, '← YOU', {
         fontFamily: YAK_FONTS.title,
-        fontSize: '11px',
-        color: '#e74c3c',
+        fontSize: '12px',
+        color: YAK_COLORS.textOrange,
+        stroke: '#000000',
+        strokeThickness: 2,
+      }).setOrigin(0, 0.5).setAlpha(0);
+
+      // Pulse animation for you indicator
+      this.tweens.add({
+        targets: youLabel,
+        alpha: 1,
+        scale: 1.1,
+        duration: 400,
+        delay: 200 + (this.playerRank - 1) * 80,
+        ease: 'Back.easeOut',
+        onComplete: () => {
+          this.tweens.add({
+            targets: youLabel,
+            scale: 1,
+            duration: 300,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+          });
+        }
       });
+
       this.leaderboardContainer.add(youLabel);
     }
   }
