@@ -5,7 +5,6 @@ import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
 import { createConfetti, createRipple, shakeCamera, flashScreen } from '../utils/VisualEffects';
 import { getCharacterQuote } from '../data/characterQuotes';
-import { createStudioBackground } from '../utils/StudioAtmosphere';
 import type { CharacterId } from '../types';
 
 export class RunScene extends Phaser.Scene {
@@ -83,139 +82,115 @@ export class RunScene extends Phaser.Scene {
   }
 
   private createBackground(): void {
-    // Studio atmosphere for Yak feel
-    createStudioBackground(this);
+    // 1. Hardwood Court Floor
+    const bg = this.add.graphics();
+    bg.fillGradientStyle(0xd2a679, 0xd2a679, 0x8b5a2b, 0x8b5a2b, 1); // Wood gradient
+    bg.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-    // Sky gradient (over studio background)
-    const skyGradient = this.add.graphics();
-    skyGradient.fillGradientStyle(0x87ceeb, 0x87ceeb, 0x4a90d9, 0x4a90d9, 0.7);
-    skyGradient.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT - 100);
-
-    // Clouds
-    this.createCloud(80, 180);
-    this.createCloud(400, 220);
-    this.createCloud(280, 160);
-
-    // Sun
-    this.add.circle(450, 200, 40, 0xfff176, 0.9);
-    this.add.circle(450, 200, 55, 0xfff176, 0.2);
-
-    // Grass
-    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 50, GAME_WIDTH, 100, 0x228b22);
-
-    // Grass texture lines
-    const grassLines = this.add.graphics();
-    grassLines.lineStyle(2, 0x1e7b1e, 0.3);
-    for (let i = 0; i < GAME_WIDTH; i += 20) {
-      grassLines.beginPath();
-      grassLines.moveTo(i, GAME_HEIGHT - 100);
-      grassLines.lineTo(i + 10, GAME_HEIGHT);
-      grassLines.strokePath();
+    // 2. Wood Planks Pattern
+    const plankGraphics = this.add.graphics();
+    plankGraphics.lineStyle(1, 0x8b5a2b, 0.3);
+    const plankWidth = 40;
+    
+    // Vertical planks
+    for (let x = 0; x < GAME_WIDTH; x += plankWidth) {
+      plankGraphics.moveTo(x, 0);
+      plankGraphics.lineTo(x, GAME_HEIGHT);
     }
+    // Random horizontal cuts for plank ends
+    for (let x = 0; x < GAME_WIDTH; x += plankWidth) {
+      for (let y = 0; y < GAME_HEIGHT; y += 150) {
+        if (Math.random() > 0.3) {
+          const yOffset = y + (Math.random() * 100);
+          plankGraphics.moveTo(x, yOffset);
+          plankGraphics.lineTo(x + plankWidth, yOffset);
+        }
+      }
+    }
+    plankGraphics.strokePath();
 
-    // Grass highlight
-    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 98, GAME_WIDTH, 4, 0x32cd32);
-  }
+    // 3. Court Lines (White)
+    const courtLines = this.add.graphics();
+    courtLines.lineStyle(4, 0xffffff, 0.9);
 
-  private createCloud(x: number, y: number): void {
-    const cloud = this.add.container(x, y);
-    [
-      { dx: 0, dy: 0, r: 25 },
-      { dx: -20, dy: 5, r: 18 },
-      { dx: 20, dy: 5, r: 18 },
-      { dx: -10, dy: -8, r: 16 },
-      { dx: 10, dy: -8, r: 16 },
-    ].forEach(c => {
-      cloud.add(this.add.circle(c.dx, c.dy, c.r, 0xffffff, 0.9));
-    });
+    // Center Court Line (at bottom)
+    courtLines.beginPath();
+    courtLines.moveTo(0, GAME_HEIGHT - 50);
+    courtLines.lineTo(GAME_WIDTH, GAME_HEIGHT - 50);
+    courtLines.strokePath();
+
+    // Three Point Arc (Top)
+    courtLines.beginPath();
+    courtLines.arc(GAME_WIDTH / 2, 100, 250, 0, Math.PI, false); 
+    courtLines.strokePath();
+
+    // Key / Paint Area (Top Center)
+    const paint = this.add.graphics();
+    paint.fillStyle(YAK_COLORS.primary, 0.2); // Yak red paint
+    paint.fillRect(GAME_WIDTH / 2 - 80, 0, 160, 300);
+    
+    courtLines.strokeRect(GAME_WIDTH / 2 - 80, 0, 160, 300);
+
+    // Free Throw Circle (Top of Key)
+    courtLines.beginPath();
+    courtLines.arc(GAME_WIDTH / 2, 300, 80, 0, Math.PI, false);
+    courtLines.strokePath();
+
+    // 4. Studio Ambience (Vignette)
+    const vignette = this.add.graphics();
+    vignette.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.6, 0.6);
+    vignette.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
   }
 
   private createBoard(): void {
+    // Positioned further back on the court
     const boardX = GAME_WIDTH / 2;
-    const boardY = 420;
-    const boardWidth = 160;
-    const boardHeight = 260;
-
-    // Board legs
-    this.add.rectangle(boardX - 50, boardY + 150, 15, 60, 0x654321).setDepth(1);
-    this.add.rectangle(boardX + 50, boardY + 150, 15, 60, 0x654321).setDepth(1);
-
-    // Ground shadow
-    this.add.ellipse(boardX, GAME_HEIGHT - 85, 200, 35, 0x000000, 0.2).setDepth(1);
+    const boardY = 320; // Higher up (further away)
+    const boardWidth = 140;
+    const boardHeight = 220;
 
     // Board shadow
     this.add.rectangle(boardX + 8, boardY + 8, boardWidth, boardHeight, 0x000000, 0.3).setDepth(2);
 
-    // Main board
+    // Main board body
     const board = this.add.rectangle(boardX, boardY, boardWidth, boardHeight, 0xdeb887).setDepth(3);
-    board.setStrokeStyle(4, 0x8b4513);
+    board.setStrokeStyle(3, 0x8b4513);
 
-    // Wood grain
+    // Wood grain for board
     const grain = this.add.graphics().setDepth(4);
-    grain.lineStyle(1, 0xd2a679, 0.5);
+    grain.lineStyle(1, 0xd2a679, 0.6);
     for (let i = -boardHeight/2 + 20; i < boardHeight/2; i += 15) {
       grain.beginPath();
-      grain.moveTo(boardX - boardWidth/2 + 8, boardY + i);
-      grain.lineTo(boardX + boardWidth/2 - 8, boardY + i + (Math.random() - 0.5) * 4);
+      grain.moveTo(boardX - boardWidth/2 + 5, boardY + i);
+      grain.lineTo(boardX + boardWidth/2 - 5, boardY + i + (Math.random() - 0.5) * 4);
       grain.strokePath();
     }
 
-    // The hole
+    // The hole (Cornhole target)
     this.holeX = boardX;
-    this.holeY = boardY - 50;
-    this.holeRadius = 44;
+    this.holeY = boardY - 40;
+    this.holeRadius = 38; // Slightly smaller for challenge
 
-    // Hole depth shadow
-    this.add.circle(this.holeX + 3, this.holeY + 3, this.holeRadius, 0x000000, 0.5).setDepth(5);
-
-    // Hole rim
-    this.add.circle(this.holeX, this.holeY, this.holeRadius + 5, 0x8b4513).setDepth(6);
-
-    // Hole dark
+    // Hole depth layers
+    this.add.circle(this.holeX + 2, this.holeY + 2, this.holeRadius, 0x000000, 0.5).setDepth(5);
+    this.add.circle(this.holeX, this.holeY, this.holeRadius + 4, 0x8b4513).setDepth(6);
     this.add.circle(this.holeX, this.holeY, this.holeRadius, 0x1a1a1a).setDepth(7);
-    this.add.circle(this.holeX, this.holeY, this.holeRadius - 8, 0x0a0a0a).setDepth(8);
+    this.add.circle(this.holeX, this.holeY, this.holeRadius - 6, 0x0a0a0a).setDepth(8);
 
-    // Target glow animation
-    const targetGlow = this.add.circle(this.holeX, this.holeY, this.holeRadius + 10, YAK_COLORS.success, 0);
-    targetGlow.setStrokeStyle(4, YAK_COLORS.success, 0.4).setDepth(4);
+    // Board legs (visual depth)
+    this.add.rectangle(boardX - 40, boardY + 120, 10, 40, 0x5c4033).setDepth(1);
+    this.add.rectangle(boardX + 40, boardY + 120, 10, 40, 0x5c4033).setDepth(1);
 
-    this.tweens.add({
-      targets: targetGlow,
-      scale: 1.3,
-      alpha: 0,
-      duration: 1200,
-      repeat: -1,
-    });
-
-    // Add Yak stool icons on either side for personality
-    const leftStool = createStoolIcon(this, boardX - 140, GAME_HEIGHT - 105, 1.2);
-    const rightStool = createStoolIcon(this, boardX + 140, GAME_HEIGHT - 105, 1.2);
-    leftStool.setDepth(2).setAlpha(0.7);
-    rightStool.setDepth(2).setAlpha(0.7);
-
-    // Subtle sway animation for personality
-    this.tweens.add({
-      targets: leftStool,
-      angle: -3,
-      duration: 2000,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut'
-    });
-
-    this.tweens.add({
-      targets: rightStool,
-      angle: 3,
-      duration: 2200,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut'
-    });
+    // Yak Stool Icons on floor near board
+    const leftStool = createStoolIcon(this, boardX - 120, boardY + 80, 1.0);
+    const rightStool = createStoolIcon(this, boardX + 120, boardY + 80, 1.0);
+    leftStool.setDepth(2).setAlpha(0.6);
+    rightStool.setDepth(2).setAlpha(0.6);
   }
 
   private createBeanbag(): void {
     this.spawnX = GAME_WIDTH / 2;
-    this.spawnY = GAME_HEIGHT - 160;
+    this.spawnY = GAME_HEIGHT - 120; // Lower on screen
 
     // Shadow
     this.bagShadow = this.add.ellipse(this.spawnX, GAME_HEIGHT - 95, 45, 18, 0x000000, 0.35);
@@ -226,29 +201,21 @@ export class RunScene extends Phaser.Scene {
     this.bagContainer.setDepth(100);
 
     // Bag body - Yak Red
-    const bagBody = this.add.rectangle(0, 0, 52, 52, YAK_COLORS.primary);
-    bagBody.setStrokeStyle(3, YAK_COLORS.primaryDark);
+    const bagBody = this.add.rectangle(0, 0, 48, 48, YAK_COLORS.primary);
+    bagBody.setStrokeStyle(2, YAK_COLORS.primaryDark);
 
     // Fabric shading
     const bagShading = this.add.graphics();
-    bagShading.fillStyle(0xff6b6b, 0.3);
-    bagShading.fillRect(-26, -26, 26, 52);
+    bagShading.fillStyle(0xff6b6b, 0.2);
+    bagShading.fillRect(-24, -24, 24, 48);
 
-    // Cross stitching (gold - Yak branding)
+    // Stitching
     const stitching = this.add.graphics();
-    stitching.lineStyle(2.5, YAK_COLORS.secondary, 0.9);
+    stitching.lineStyle(2, YAK_COLORS.secondary, 0.8);
     stitching.beginPath();
-    stitching.moveTo(-20, 0);
-    stitching.lineTo(20, 0);
-    stitching.moveTo(0, -20);
-    stitching.lineTo(0, 20);
+    stitching.moveTo(-18, 0); stitching.lineTo(18, 0);
+    stitching.moveTo(0, -18); stitching.lineTo(0, 18);
     stitching.strokePath();
-
-    // Corner dots
-    stitching.fillStyle(YAK_COLORS.secondary, 0.7);
-    [[-18, -18], [18, -18], [-18, 18], [18, 18]].forEach(([x, y]) => {
-      stitching.fillCircle(x, y, 3);
-    });
 
     this.bagContainer.add([bagShading, bagBody, stitching]);
   }
@@ -275,59 +242,47 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
-    const power = Math.min(distance / 8, 35);
-    const vx = (dx / distance) * power * 0.4;
-    const vy = (dy / distance) * power;
+    // Increased challenge: Scaling power differently
+    const power = Math.min(distance / 7, 45); 
+    const vx = (dx / distance) * power * 0.35; // Slightly harder horizontal aim
+    const vy = (dy / distance) * power * 1.1; // More vertical power needed for distance
 
     // Trajectory preview
-    const gravity = 0.4;
+    const gravity = 0.5; // Heavier feel
     let px = this.bagContainer.x;
     let py = this.bagContainer.y;
     let pvx = vx;
     let pvy = vy;
 
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 40; i++) {
       px += pvx;
       pvy += gravity;
       py += pvy;
 
-      if (py > GAME_HEIGHT + 50 || py < -50) break;
+      if (py > GAME_HEIGHT + 50) break;
 
       if (i % 3 === 0) {
-        const alpha = 0.8 - (i / 60);
-        const size = 6 - (i / 12);
+        const alpha = 0.7 - (i / 50);
         this.trajectoryDots.fillStyle(0xffffff, alpha);
-        this.trajectoryDots.fillCircle(px, py, Math.max(size, 2));
+        this.trajectoryDots.fillCircle(px, py, 3);
       }
     }
 
-    // Power indicator colors
-    const powerPercent = Math.min((power / 35) * 100, 100);
+    // Aim Line
+    const powerPercent = Math.min((power / 45) * 100, 100);
     let color = YAK_COLORS.success;
-    if (powerPercent > 50) color = YAK_COLORS.warning;
-    if (powerPercent > 80) color = YAK_COLORS.danger;
+    if (powerPercent > 60) color = YAK_COLORS.warning;
+    if (powerPercent > 90) color = YAK_COLORS.danger;
 
-    // Aim line
-    this.aimLine.lineStyle(4, color, 0.9);
+    this.aimLine.lineStyle(3, color, 0.8);
     this.aimLine.beginPath();
     this.aimLine.moveTo(this.bagContainer.x, this.bagContainer.y);
-    const lineLen = Math.min(distance * 0.8, 120);
-    const endX = this.bagContainer.x + (dx / distance) * lineLen;
-    const endY = this.bagContainer.y + (dy / distance) * lineLen;
-    this.aimLine.lineTo(endX, endY);
-    this.aimLine.strokePath();
-
-    // Arrow head
-    const angle = Math.atan2(dy, dx);
-    this.aimLine.fillStyle(color, 0.9);
-    this.aimLine.fillTriangle(
-      endX + Math.cos(angle) * 10,
-      endY + Math.sin(angle) * 10,
-      endX + Math.cos(angle + 2.5) * 10,
-      endY + Math.sin(angle + 2.5) * 10,
-      endX + Math.cos(angle - 2.5) * 10,
-      endY + Math.sin(angle - 2.5) * 10
+    const lineLen = Math.min(distance * 0.7, 100);
+    this.aimLine.lineTo(
+      this.bagContainer.x + (dx / distance) * lineLen,
+      this.bagContainer.y + (dy / distance) * lineLen
     );
+    this.aimLine.strokePath();
 
     this.instructionText.setText(`POWER: ${Math.round(powerPercent)}%`);
   }
@@ -352,9 +307,9 @@ export class RunScene extends Phaser.Scene {
     this.instructionText.setVisible(false);
     GameStateService.startTimer();
 
-    const power = Math.min(distance / 8, 35);
-    const vx = (dx / distance) * power * 0.4;
-    const vy = (dy / distance) * power;
+    const power = Math.min(distance / 7, 45);
+    const vx = (dx / distance) * power * 0.35;
+    const vy = (dy / distance) * power * 1.1;
 
     this.launchBag(vx, vy);
   }
@@ -362,9 +317,9 @@ export class RunScene extends Phaser.Scene {
   private launchBag(vx: number, vy: number): void {
     let velocityX = vx;
     let velocityY = vy;
-    const gravity = PHYSICS.GRAVITY_NORMAL;
-    const friction = PHYSICS.FRICTION_MEDIUM;
-    const bounce = PHYSICS.BOUNCE_LOW;
+    const gravity = 0.5; // Heavier gravity for "beanbag" feel
+    const friction = 0.98; // Air resistance
+    const floorFriction = 0.8; // Sliding friction
 
     this.trailPoints = [];
     this.trail.clear();
@@ -381,77 +336,74 @@ export class RunScene extends Phaser.Scene {
 
       this.bagContainer.x += velocityX;
       this.bagContainer.y += velocityY;
-      this.bagContainer.rotation += velocityX * 0.03;
+      this.bagContainer.rotation += velocityX * 0.05; // Spin
 
-      // Update shadow
+      // Shadow logic
       this.bagShadow.x = this.bagContainer.x;
-      const shadowScale = Math.max(0.3, 1 - (GAME_HEIGHT - 95 - this.bagContainer.y) / 500);
-      this.bagShadow.setScale(shadowScale, shadowScale * 0.4);
-      this.bagShadow.setAlpha(0.35 * shadowScale);
+      // Shadow gets smaller as bag goes "up/back" (y decreases)
+      const depthScale = Math.max(0.2, (this.bagContainer.y - 200) / 600); 
+      this.bagShadow.setScale(depthScale * 1.2, depthScale * 0.5);
+      this.bagShadow.setAlpha(0.3 * depthScale);
 
       // Trail
       this.trailPoints.push({ x: this.bagContainer.x, y: this.bagContainer.y });
-      if (this.trailPoints.length > 30) this.trailPoints.shift();
-
+      if (this.trailPoints.length > 25) this.trailPoints.shift();
       this.trail.clear();
       for (let i = 1; i < this.trailPoints.length; i++) {
-        const alpha = (i / this.trailPoints.length) * 0.5;
-        const size = (i / this.trailPoints.length) * 10;
-        this.trail.fillStyle(YAK_COLORS.primary, alpha);
-        this.trail.fillCircle(this.trailPoints[i].x, this.trailPoints[i].y, size);
+        this.trail.fillStyle(YAK_COLORS.primary, (i/25)*0.4);
+        this.trail.fillCircle(this.trailPoints[i].x, this.trailPoints[i].y, (i/25)*8);
       }
 
-      // Bounds
-      if (this.bagContainer.x < 30) {
-        this.bagContainer.x = 30;
-        velocityX = -velocityX * bounce;
-      }
-      if (this.bagContainer.x > GAME_WIDTH - 30) {
-        this.bagContainer.x = GAME_WIDTH - 30;
-        velocityX = -velocityX * bounce;
+      // Bounds check (Walls)
+      if (this.bagContainer.x < 0 || this.bagContainer.x > GAME_WIDTH) {
+        velocityX = -velocityX * 0.5; // Bounce off walls
+        this.bagContainer.x = Math.max(0, Math.min(GAME_WIDTH, this.bagContainer.x));
       }
 
-      // Hole check
+      // 1. Hole Detection (Success)
       const distToHole = Phaser.Math.Distance.Between(
         this.bagContainer.x, this.bagContainer.y,
         this.holeX, this.holeY
       );
 
-      if (distToHole < this.holeRadius - 10) {
+      // Smaller hitbox for hole
+      if (distToHole < this.holeRadius - 15) {
         this.events.off('update', updateHandler);
         this.handleSuccess();
         return;
       }
 
-      // Board collision
-      const boardTop = 420 - 130;
-      const boardBottom = 420 + 130;
-      const boardLeft = GAME_WIDTH/2 - 80;
-      const boardRight = GAME_WIDTH/2 + 80;
+      // 2. Board Collision (Bounce/Slide)
+      const boardTop = 320 - 110;
+      const boardBottom = 320 + 110;
+      const boardLeft = GAME_WIDTH/2 - 70;
+      const boardRight = GAME_WIDTH/2 + 70;
 
+      // If landing on board area
       if (this.bagContainer.x > boardLeft && this.bagContainer.x < boardRight &&
           this.bagContainer.y > boardTop && this.bagContainer.y < boardBottom) {
-        if (distToHole > this.holeRadius + 15) {
-          if (velocityY > 0) {
-            velocityY = -velocityY * 0.15;
-            velocityX *= 0.6;
-          }
+        
+        // If falling down onto it
+        if (velocityY > 0) {
+           velocityY = -velocityY * 0.1; // Tiny bounce, mostly slide
+           velocityX *= 0.7; // Friction
         }
       }
 
-      // Ground
-      if (this.bagContainer.y > GAME_HEIGHT - 100) {
-        this.events.off('update', updateHandler);
-        this.handleMiss();
-        return;
+      // 3. Ground/Miss Detection
+      // If it goes past the board or stops moving
+      if (this.bagContainer.y > GAME_HEIGHT + 50) {
+         this.events.off('update', updateHandler);
+         this.handleMiss();
+         return;
       }
 
-      // Stopped
-      const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
-      if (speed < 0.5 && this.bagContainer.y > 250) {
-        this.events.off('update', updateHandler);
-        this.handleMiss();
-        return;
+      // Stop check
+      const speed = Math.sqrt(velocityX*velocityX + velocityY*velocityY);
+      if (speed < 0.1 && this.bagContainer.y > 200) {
+         this.events.off('update', updateHandler);
+         this.handleMiss();
+         return;
       }
     };
 
@@ -461,29 +413,21 @@ export class RunScene extends Phaser.Scene {
   private handleSuccess(): void {
     this.trail.clear();
 
-    // Visual effects
+    // Sound/Visuals
     flashScreen(this, 'green', 150);
     shakeCamera(this, 'light');
-    createRipple(this, this.holeX, this.holeY, {
-      color: YAK_COLORS.successBright,
-      endRadius: 100,
-      duration: 500,
-    });
-    createConfetti(this, this.holeX, this.holeY, {
-      count: 25,
-      spread: 120,
-      height: 200,
-    });
+    createRipple(this, this.holeX, this.holeY, { color: YAK_COLORS.successBright, endRadius: 80, duration: 400 });
+    createConfetti(this, this.holeX, this.holeY, { count: 20 });
 
-    // Animate into hole
+    // Suck into hole animation
     this.tweens.add({
       targets: this.bagContainer,
       x: this.holeX,
       y: this.holeY,
-      scale: 0.2,
+      scale: 0.1,
       alpha: 0,
-      duration: 250,
-      ease: 'Power2'
+      duration: 300,
+      ease: 'Back.in'
     });
 
     this.tweens.add({
@@ -492,13 +436,11 @@ export class RunScene extends Phaser.Scene {
       duration: 250
     });
 
-    // Get character quote
     const state = GameStateService.getState();
-    const characterId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
-    const quote = getCharacterQuote(characterId, 'success');
-    this.showCharacterQuote(quote, YAK_COLORS.success);
+    const charId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
+    const quote = getCharacterQuote(charId, 'success');
+    this.showCharacterQuote(quote, 0x4ade80); // Success Green
 
-    // Success effect
     showSuccessEffect(this, this.holeX, this.holeY, getRandomSuccess(), () => {
       this.scene.start('GoalieScene');
     });
@@ -509,19 +451,12 @@ export class RunScene extends Phaser.Scene {
     this.ui.missText.setText(`Misses: ${this.missCount}`);
     GameStateService.recordMiss('cornhole');
 
-    // Visual feedback
     shakeCamera(this, 'light');
-    createRipple(this, this.bagContainer.x, this.bagContainer.y, {
-      color: YAK_COLORS.danger,
-      endRadius: 60,
-      duration: 400,
-    });
-
-    // Get character quote
+    
     const state = GameStateService.getState();
-    const characterId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
-    const quote = getCharacterQuote(characterId, 'miss');
-    this.showCharacterQuote(quote, YAK_COLORS.danger);
+    const charId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
+    const quote = getCharacterQuote(charId, 'miss');
+    this.showCharacterQuote(quote, 0xef4444); // Failure Red
 
     showFailEffect(this, this.bagContainer.x, this.bagContainer.y, getRandomFail());
 
@@ -530,64 +465,47 @@ export class RunScene extends Phaser.Scene {
 
   private resetBeanbag(): void {
     this.hasLaunched = false;
-    this.trailPoints = [];
     this.trail.clear();
-
     this.bagContainer.setPosition(this.spawnX, this.spawnY);
     this.bagContainer.setRotation(0);
     this.bagContainer.setScale(1);
     this.bagContainer.setAlpha(1);
-
     this.bagShadow.setPosition(this.spawnX, GAME_HEIGHT - 95);
-    this.bagShadow.setScale(1, 0.4);
+    this.bagShadow.setScale(1, 0.35);
     this.bagShadow.setAlpha(0.35);
-
     this.instructionText.setVisible(true);
     this.instructionText.setText('DRAG TO AIM & THROW');
   }
 
   private showCharacterQuote(text: string, color: number): void {
-    const quoteY = GAME_HEIGHT * 0.3;
-    
-    // Quote bubble
+    const quoteY = GAME_HEIGHT * 0.25;
     const bubble = this.add.graphics();
-    bubble.fillStyle(0x1a1a1a, 0.95);
-    bubble.fillRoundedRect(GAME_WIDTH / 2 - 100, quoteY - 20, 200, 40, 12);
-    bubble.lineStyle(3, color, 1);
-    bubble.strokeRoundedRect(GAME_WIDTH / 2 - 100, quoteY - 20, 200, 40, 12);
+    bubble.fillStyle(0x1a1a1a, 0.9);
+    bubble.fillRoundedRect(GAME_WIDTH/2 - 120, quoteY - 25, 240, 50, 10);
+    bubble.lineStyle(2, color, 1);
+    bubble.strokeRoundedRect(GAME_WIDTH/2 - 120, quoteY - 25, 240, 50, 10);
     bubble.setDepth(200);
 
-    // Quote text
-    const quoteText = this.add.text(GAME_WIDTH / 2, quoteY, text, {
-      fontSize: '18px',
+    const quoteText = this.add.text(GAME_WIDTH/2, quoteY, text, {
+      fontSize: '20px',
       fontFamily: YAK_FONTS.title,
-      color: `#${color.toString(16).padStart(6, '0')}`,
-      fontStyle: 'bold',
+      color: '#ffffff',
       align: 'center',
+      wordWrap: { width: 220 }
     }).setOrigin(0.5).setDepth(201);
 
-    // Animate in
-    [bubble, quoteText].forEach(obj => {
-      obj.setScale(0);
-      this.tweens.add({
-        targets: obj,
-        scale: 1,
-        duration: 200,
-        ease: 'Back.easeOut',
-      });
+    [bubble, quoteText].forEach(o => {
+      o.setScale(0);
+      this.tweens.add({ targets: o, scale: 1, duration: 200, ease: 'Back.out' });
     });
 
-    // Auto-hide
-    this.time.delayedCall(2000, () => {
+    this.time.delayedCall(1500, () => {
       this.tweens.add({
         targets: [bubble, quoteText],
         alpha: 0,
-        y: quoteY - 20,
+        y: quoteY - 30,
         duration: 300,
-        onComplete: () => {
-          bubble.destroy();
-          quoteText.destroy();
-        },
+        onComplete: () => { bubble.destroy(); quoteText.destroy(); }
       });
     });
   }
@@ -597,12 +515,9 @@ export class RunScene extends Phaser.Scene {
   }
 
   shutdown(): void {
-    // Clean up event handlers
     this.events.removeAllListeners('update');
     this.input.removeAllListeners();
-    // Clean up tweens
     this.tweens.killAll();
-    // Clean up timers
     this.time.removeAllEvents();
   }
 }

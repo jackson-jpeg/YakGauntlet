@@ -3,27 +3,31 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { firebaseConfig } from '../config/firebaseConfig';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
-import { YAK_COLORS, YAK_FONTS, STATIONS, createStoolIcon } from '../config/theme';
+import { YAK_COLORS, YAK_FONTS, STATIONS } from '../config/theme';
 
 /**
- * THE YAK GAUNTLET - BOOT SCENE (The Studio)
- * ------------------------------------------------------------------
- * Features:
- * 1. Tossable Crew Heads (Physics)
- * 2. "The Ball Pit" (Sports Balls instead of Trash)
- * 3. The "Easy Button" Start
- * 4. Breaking News Ticker
- * 5. Ominous Wet Wheel Background
+ * THE YAK GAUNTLET - BOOT SCENE (ULTIMATE STUDIO EDITION)
+ * =================================================================
+ * A fully interactive, physics-based "Lobby" representing the Yak Studio.
  */
 
 export class BootScene extends Phaser.Scene {
-  // Container references
+  // --- STATE ---
+  private isTransitioning = false;
+  private timeElapsed = 0;
+  
+  // --- VISUAL CONTAINERS ---
   private logoContainer!: Phaser.GameObjects.Container;
   private easyButton!: Phaser.GameObjects.Container;
-  private tickerText!: Phaser.GameObjects.Text;
-
-  // State
-  private isTransitioning = false;
+  private tickerContainer!: Phaser.GameObjects.Container;
+  
+  // --- PHYSICS GROUPS ---
+  private balls: Phaser.Physics.Matter.Image[] = [];
+  private heads: Phaser.Physics.Matter.Image[] = [];
+  
+  // --- LIGHTING ---
+  private spotlight!: Phaser.GameObjects.Light;
+  private lightFollowSpeed = 0.1;
 
   constructor() {
     super({ key: 'BootScene' });
@@ -31,283 +35,273 @@ export class BootScene extends Phaser.Scene {
 
   preload(): void {
     this.createLoadingUI();
-    
-    // Generate Assets
-    this.generateGameTextures(); // Balls (Basketball, Football, etc)
-    this.generateYakTextures();  // Wheel, Button
-    this.generatePixelCrew();    // The Crew Heads
+    // CALL THE TEXTURE GENERATORS
+    this.generateYakTextures(); 
+    this.generateGameTextures(); 
+    this.generatePixelCrew(); 
   }
 
   create(): void {
-    // 1. Initialize Backend
     this.initFirebase();
 
-    // 2. The Studio Environment
-    this.createStudioBackground();
-    this.createWheelAura();
+    // 1. ENABLE LIGHTING SYSTEM
+    this.lights.enable().setAmbientColor(0x888888);
 
-    // 3. Physics World Setup
-    this.setupPhysicsWorld();
-    this.spawnSportsChaos();  // NEW: Spawns balls instead of trash
-    this.spawnCrewHeads();    // The tossable heads
+    // 2. BUILD THE STUDIO (Backgrounds & Floor)
+    this.createStudioEnvironment();
+    this.createWetWheelBackground();
 
-    // 4. UI Layer
-    this.createGlitchLogo();
-    this.createStationPreview();
-    this.createEasyButton();
-    this.createDataDayTicker();
+    // 3. INITIALIZE PHYSICS WORLD
+    this.setupPhysics();
 
-    // 5. Ambient Effects
-    this.startGraffitiLoop();
+    // 4. SPAWN THE CHAOS (The Ball Pit & Crew)
+    this.time.delayedCall(500, () => this.startBallPitRain());
+    this.time.delayedCall(1500, () => this.spawnCrewHeads());
+
+    // 5. BUILD UI (Floating above physics)
+    this.createDataDayTicker(); // Floor Level
+    this.createGlitchLogo();    // Top Level
+    this.createEasyButton();    // Mid Level
+    this.createStationPreview(); // Mid Level
+
+    // 6. INPUTS & INTERACTIONS
+    this.setupInteractions();
+    
+    // 7. BROADCAST OVERLAYS
+    this.createScanlines();
   }
 
-  update(): void {
-    // Scroll the ticker
-    if (this.tickerText) {
-      this.tickerText.x -= 2.5;
-      if (this.tickerText.x < -this.tickerText.width) {
-        this.tickerText.x = GAME_WIDTH;
+  update(time: number, delta: number): void {
+    this.timeElapsed += delta;
+
+    // 1. Ticker Scroll Logic
+    if (this.tickerContainer) {
+      this.tickerContainer.x -= 2; 
+      // Reset loop
+      if (this.tickerContainer.x < -this.tickerContainer.getBounds().width) {
+        this.tickerContainer.x = GAME_WIDTH;
       }
     }
-  }
 
-  // =================================================================================================
-  //  INIT & SETUP
-  // =================================================================================================
+    // 2. Mouse Tracking Spotlight
+    const pointer = this.input.activePointer;
+    if (this.spotlight) {
+        // Smooth lerp to mouse position
+        this.spotlight.x += (pointer.x - this.spotlight.x) * this.lightFollowSpeed;
+        this.spotlight.y += (pointer.y - this.spotlight.y) * this.lightFollowSpeed;
+    }
 
-  private initFirebase(): void {
-    try {
-      const app = initializeApp(firebaseConfig);
-      const db = getFirestore(app);
-      this.registry.set('firebase', { app, db });
-    } catch (e) {
-      console.warn('Firebase skipped');
+    // 3. Logo Glitch Randomizer
+    if (Math.random() > 0.98) {
+        this.triggerLogoGlitch();
     }
   }
 
-  private setupPhysicsWorld(): void {
-    // Walls: Left, Right, Floor. Top is open.
-    this.matter.world.setBounds(0, -2000, GAME_WIDTH, GAME_HEIGHT + 2000);
+  // =================================================================
+  //  ENVIRONMENT & LIGHTING
+  // =================================================================
+
+  private createStudioEnvironment(): void {
+    // Deep Studio Grey Background
+    const bg = this.add.rectangle(GAME_WIDTH/2, GAME_HEIGHT/2, GAME_WIDTH, GAME_HEIGHT, 0x1a1a1a);
+    bg.setPipeline('Light2D'); // Reacts to light
+
+    // Parquet Floor Pattern
+    const floor = this.add.graphics();
+    floor.lineStyle(2, 0x000000, 0.2);
     
-    // Enable Mouse Interaction
-    this.matter.add.mouseSpring({
-      stiffness: 0.2,
-      damping: 0.8,
-      length: 1
-    });
+    // Draw intricate parquet pattern
+    const tileSize = 80;
+    for (let x = 0; x < GAME_WIDTH + tileSize; x += tileSize) {
+        for (let y = 0; y < GAME_HEIGHT + tileSize; y += tileSize) {
+            // Zig-Zag offsets
+            const offset = (Math.floor(x/tileSize) % 2 === 0) ? 0 : tileSize/2;
+            // Draw planks
+            floor.moveTo(x, y + offset);
+            floor.lineTo(x + tileSize, y + offset);
+            floor.moveTo(x, y + offset);
+            floor.lineTo(x, y + tileSize + offset);
+        }
+    }
+    floor.setDepth(0);
+
+    // Create the Mouse Spotlight
+    this.spotlight = this.lights.addLight(GAME_WIDTH/2, GAME_HEIGHT/2, 400).setIntensity(2);
   }
 
-  // =================================================================================================
-  //  VISUAL LAYERS
-  // =================================================================================================
-
-  private createStudioBackground(): void {
-    const bg = this.add.graphics();
-    bg.fillGradientStyle(YAK_COLORS.navyDark, YAK_COLORS.navyDark, YAK_COLORS.bgDark, YAK_COLORS.bgDark, 1);
-    bg.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-
-    // Subtle Grid
-    const grid = this.add.graphics();
-    grid.lineStyle(2, 0xffffff, 0.03);
-    for(let i=0; i<GAME_WIDTH; i+=60) {
-        grid.moveTo(i, 0); grid.lineTo(i, GAME_HEIGHT);
-    }
-    for(let i=0; i<GAME_HEIGHT; i+=60) {
-        grid.moveTo(0, i); grid.lineTo(GAME_WIDTH, i);
-    }
-    grid.strokePath();
-  }
-
-  private createWheelAura(): void {
-    const wheel = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT * 0.4, 'wet_wheel');
-    const scale = Math.min(GAME_WIDTH, GAME_HEIGHT) / 400; 
-    wheel.setScale(scale);
-    wheel.setAlpha(0.08); 
-    wheel.setTint(0x999999); 
-
+  private createWetWheelBackground(): void {
+    // The ominous wheel spinning in the void
+    const wheel = this.add.image(GAME_WIDTH/2, GAME_HEIGHT * 0.45, 'wet_wheel_hd');
+    wheel.setScale(1.8);
+    wheel.setAlpha(0.08); // Very subtle
+    wheel.setDepth(1);
+    
+    // Infinite Rotation
     this.tweens.add({
         targets: wheel,
         angle: 360,
-        duration: 40000,
+        duration: 60000, // 1 minute per rotation (slow & menacing)
         repeat: -1,
         ease: 'Linear'
     });
 
+    // "Breathing" Scale Effect
     this.tweens.add({
         targets: wheel,
-        scale: scale * 1.1,
-        alpha: 0.12,
-        duration: 5000,
+        scale: 2.0,
+        duration: 4000,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut'
     });
   }
 
-  // =================================================================================================
-  //  PHYSICS OBJECTS
-  // =================================================================================================
-
-  private spawnCrewHeads(): void {
-    const size = 64; 
+  private createScanlines(): void {
+    // TV Broadcast effect overlay
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x000000, 0.1);
+    for(let i=0; i<GAME_HEIGHT; i+=4) {
+        overlay.fillRect(0, i, GAME_WIDTH, 1);
+    }
+    overlay.setDepth(999); // Top of everything
+    overlay.setBlendMode(Phaser.BlendModes.OVERLAY);
     
-    for(let i=0; i<6; i++) {
-        const x = Phaser.Math.Between(100, GAME_WIDTH - 100);
-        const y = Phaser.Math.Between(100, GAME_HEIGHT * 0.5);
-        
-        const head = this.matter.add.image(x, y, `crew_${i}`);
-        head.setDisplaySize(size, size);
-        head.setCircle(size / 2.2); 
-        head.setBounce(0.85); 
-        head.setFriction(0.1);
-        head.setDensity(0.01); 
-        head.setVelocity(Phaser.Math.Between(-5, 5), Phaser.Math.Between(-5, 5));
-    }
+    // FIX: Removed overlay.setInteractive(false) which caused the crash
+    // Graphics are non-interactive by default.
   }
 
-  private spawnSportsChaos(): void {
-    // REPLACED "The Pile" with Sports Balls
-    const groundY = GAME_HEIGHT - 100;
-    const items = ['basketball', 'football', 'soccerball', 'wiffleball'];
+  // =================================================================
+  //  PHYSICS ENGINE SETUP
+  // =================================================================
 
-    for(let i=0; i<12; i++) {
-        const type = items[Math.floor(Math.random() * items.length)];
-        const x = Phaser.Math.Between(50, GAME_WIDTH-50);
-        const y = groundY - (Math.random() * 300);
-
-        const ball = this.matter.add.image(x, y, type);
-        
-        // Physics tweaks based on ball type
-        if (type === 'football') {
-            ball.setDisplaySize(50, 30);
-            // Approximate oval/chamfer hitbox
-            ball.setBody({ type: 'rectangle', width: 45, height: 25 }, { chamfer: { radius: 10 } });
-            ball.setBounce(0.6); // Fun erratic bounce
-        } else {
-            const size = type === 'basketball' ? 45 : type === 'soccerball' ? 40 : 25;
-            ball.setDisplaySize(size, size);
-            ball.setCircle(size/2);
-            ball.setBounce(0.8);
-        }
-        
-        ball.setFriction(0.05);
-        ball.setAngle(Math.random() * 360);
-    }
+  private setupPhysics(): void {
+    // Create walls that allow balls to stack at the bottom
+    this.matter.world.setBounds(0, -4000, GAME_WIDTH, GAME_HEIGHT, 64, true, true, true, true);
+    
+    // Add Mouse Constraint (The ability to throw things)
+    this.matter.add.mouseSpring({
+        length: 1,
+        stiffness: 0.5,
+        damping: 0.7
+    });
   }
 
-  // =================================================================================================
-  //  UI ELEMENTS
-  // =================================================================================================
+  private startBallPitRain(): void {
+    // Rain different balls with different physical properties
+    const ballTypes = [
+        { key: 'basketball_hd', scale: 0.5, bounce: 0.9, mass: 5, count: 12 },
+        { key: 'football_hd',   scale: 0.6, bounce: 0.6, mass: 4, count: 8 },
+        { key: 'soccer_hd',     scale: 0.5, bounce: 0.8, mass: 4, count: 10 },
+        { key: 'wiffle_hd',     scale: 0.4, bounce: 0.4, mass: 0.5, count: 15 }
+    ];
 
-  private createGlitchLogo(): void {
-    const y = GAME_HEIGHT * 0.25;
-    this.logoContainer = this.add.container(GAME_WIDTH/2, y);
+    let delay = 0;
 
-    const leftStool = createStoolIcon(this, -140, 0, 1.5).setAngle(-10);
-    const rightStool = createStoolIcon(this, 140, 0, 1.5).setAngle(10);
-
-    const yakText = this.add.text(0, 0, 'THE YAK', {
-        fontFamily: 'Arial Black',
-        fontSize: '72px',
-        color: YAK_COLORS.textOrange,
-        stroke: '#000000',
-        strokeThickness: 10,
-        shadow: { offsetX: 5, offsetY: 5, color: '#000', blur: 0, fill: true }
-    }).setOrigin(0.5);
-
-    const gauntletText = this.add.text(0, 60, 'GAUNTLET', {
-        fontFamily: 'Arial Black',
-        fontSize: '36px',
-        color: YAK_COLORS.textGold,
-        stroke: '#000000',
-        strokeThickness: 7,
-        shadow: { offsetX: 3, offsetY: 3, color: '#000', blur: 0, fill: true }
-    }).setOrigin(0.5);
-
-    this.logoContainer.add([leftStool, rightStool, yakText, gauntletText]);
-
-    // Glitch Animation
-    this.time.addEvent({
-        delay: 2500,
-        loop: true,
-        callback: () => {
-            if (Math.random() > 0.5) {
-                this.tweens.add({
-                    targets: this.logoContainer,
-                    x: GAME_WIDTH/2 + Phaser.Math.Between(-5, 5),
-                    y: y + Phaser.Math.Between(-5, 5),
-                    angle: Phaser.Math.Between(-2, 2),
-                    duration: 50,
-                    yoyo: true,
-                    repeat: 3
-                });
-            }
+    ballTypes.forEach(type => {
+        for(let i=0; i<type.count; i++) {
+            this.time.delayedCall(delay, () => {
+                const x = Phaser.Math.Between(50, GAME_WIDTH - 50);
+                const y = -100 - (Math.random() * 500); // Start off screen
+                
+                const ball = this.matter.add.image(x, y, type.key);
+                ball.setScale(type.scale);
+                ball.setCircle(ball.displayWidth / 2);
+                ball.setBounce(type.bounce);
+                ball.setMass(type.mass);
+                ball.setFriction(0.05);
+                ball.setDepth(10); // Above floor, below UI
+                
+                // Add erratic spin
+                ball.setAngularVelocity(Phaser.Math.Between(-0.2, 0.2));
+                
+                this.balls.push(ball);
+            });
+            delay += 100; // Stagger spawn
         }
     });
   }
 
+  private spawnCrewHeads(): void {
+    // The Yak Crew - Heavier, bigger, distinct
+    const crew = ['BIG CAT', 'BRANDON', 'KB', 'NICK', 'RONE', 'SAS', 'TITUS'];
+    
+    crew.forEach((member, i) => {
+        const x = Phaser.Math.Between(100, GAME_WIDTH - 100);
+        const y = -1000 - (i * 200); // Fall from sky later
+        
+        const head = this.matter.add.image(x, y, `crew_head_${i}`);
+        head.setDisplaySize(96, 96); // Large heads
+        
+        // Custom hitbox for head shape (Circle is fine for chaos)
+        head.setCircle(45);
+        head.setBounce(0.5); // Heads don't bounce like basketballs
+        head.setMass(10); // Heavy
+        head.setFriction(0.5);
+        head.setDepth(15); // Above balls
+        
+        this.heads.push(head);
+    });
+  }
+
+  // =================================================================
+  //  UI & INTERACTION
+  // =================================================================
+
   private createEasyButton(): void {
-    const y = GAME_HEIGHT * 0.72;
+    const y = GAME_HEIGHT * 0.75;
+    
+    // Container
+    this.easyButton = this.add.container(GAME_WIDTH/2, y);
+    this.easyButton.setDepth(100);
 
-    const base = this.add.circle(0, 10, 68, YAK_COLORS.stoolDark).setStrokeStyle(4, 0x000);
-    const btn = this.add.circle(0, 0, 62, YAK_COLORS.primary).setStrokeStyle(4, YAK_COLORS.primaryDark);
-    const glow = this.add.circle(0, 0, 72, YAK_COLORS.primaryBright, 0.3);
+    // 1. The Red Button (Generated Texture)
+    const btn = this.add.image(0, 0, 'easy_button_hd');
+    
+    // 2. The Text
+    const text = this.add.text(0, 5, 'easy', {
+        fontFamily: 'Arial',
+        fontStyle: 'bold',
+        fontSize: '32px',
+        color: '#ffffff'
+    }).setOrigin(0.5);
 
-    const text = this.add.text(0, 0, 'easy', {
-        fontFamily: 'Arial Black',
-        fontSize: '40px',
-        color: '#ffffff',
-        stroke: '#000000',
-        strokeThickness: 4
-    }).setOrigin(0.5).setPadding(0, 5, 0, 0);
+    // 3. Instruction
+    const subText = this.add.text(0, 80, 'PRESS TO START', {
+        fontFamily: YAK_FONTS.mono,
+        fontSize: '18px',
+        color: YAK_COLORS.textGold,
+        backgroundColor: '#000000',
+        padding: { x: 8, y: 4 }
+    }).setOrigin(0.5);
 
-    this.easyButton = this.add.container(GAME_WIDTH/2, y, [glow, base, btn, text]);
-    const hitArea = this.add.circle(GAME_WIDTH/2, y, 75).setInteractive({ useHandCursor: true });
+    // 4. Hit Area
+    // Correctly enable interactivity on a generic geometry object
+    const hit = this.add.circle(0, 10, 70);
+    hit.setInteractive(new Phaser.Geom.Circle(0, 10, 70), Phaser.Geom.Circle.Contains);
+    hit.input!.cursor = 'pointer';
 
+    this.easyButton.add([btn, text, subText, hit]);
+
+    // Animations
     this.tweens.add({
         targets: this.easyButton,
         y: y - 10,
-        duration: 1500,
+        duration: 2000,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut'
     });
 
-    this.tweens.add({
-        targets: glow,
-        scale: 1.15,
-        alpha: 0.1,
-        duration: 1000,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-    });
-
-    const prompt = this.add.text(GAME_WIDTH/2, y + 95, 'PRESS TO START', {
-        fontFamily: YAK_FONTS.title,
-        fontSize: '22px',
-        color: YAK_COLORS.textGold,
-        stroke: '#000000',
-        strokeThickness: 5
-    }).setOrigin(0.5);
-
-    this.tweens.add({
-        targets: prompt,
-        scale: 1.05,
-        duration: 800,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-    });
-
-    hitArea.on('pointerdown', () => {
-        if (this.isTransitioning) return;
+    // Interaction
+    hit.on('pointerdown', () => {
+        if(this.isTransitioning) return;
         this.isTransitioning = true;
-        btn.setFillStyle(YAK_COLORS.primaryDark);
+        
+        // Button Squish
         this.tweens.add({
-            targets: this.easyButton,
+            targets: [btn, text],
             scaleY: 0.8,
-            y: y + 10,
+            y: 15,
             duration: 50,
             yoyo: true,
             onComplete: () => this.startGame()
@@ -315,53 +309,48 @@ export class BootScene extends Phaser.Scene {
     });
   }
 
-  private createStationPreview(): void {
-    const y = GAME_HEIGHT * 0.55;
-    const spacing = 75;
-    const startX = GAME_WIDTH/2 - ((STATIONS.length-1) * spacing) / 2;
+  private createGlitchLogo(): void {
+    const y = GAME_HEIGHT * 0.25;
+    this.logoContainer = this.add.container(GAME_WIDTH/2, y);
+    this.logoContainer.setDepth(100);
 
-    const title = this.add.text(GAME_WIDTH/2, y - 50, '7 CHALLENGES', {
-        fontFamily: YAK_FONTS.title,
-        fontSize: '24px',
-        color: YAK_COLORS.textGold,
-        stroke: '#000000',
-        strokeThickness: 4
+    const yak = this.add.text(0, 0, "THE YAK", {
+        fontFamily: 'Arial Black', fontSize: '84px', color: '#e74c3c', 
+        stroke: '#000', strokeThickness: 12
     }).setOrigin(0.5);
 
-    this.tweens.add({
-        targets: title,
-        scale: 1.05,
-        duration: 1200,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-    });
+    const gauntlet = this.add.text(0, 70, "GAUNTLET", {
+        fontFamily: 'Arial Black', fontSize: '42px', color: '#f1c40f',
+        stroke: '#000', strokeThickness: 8
+    }).setOrigin(0.5);
 
-    STATIONS.forEach((s, i) => {
-        const x = startX + i * spacing;
-        const glow = this.add.circle(x, y, 20, s.color, 0.3);
-        const iconBg = this.add.circle(x, y, 16, s.color, 1).setStrokeStyle(3, 0xffffff, 0.9);
-        const emoji = this.add.text(x, y, s.emoji, { fontSize: '22px' }).setOrigin(0.5);
+    this.logoContainer.add([yak, gauntlet]);
+  }
 
-        this.tweens.add({
-            targets: [glow, iconBg, emoji],
-            y: y - 5,
-            duration: 800 + (i * 100),
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut',
-            delay: i * 150
-        });
+  private triggerLogoGlitch(): void {
+    // Random visual corruption
+    const offsetX = Phaser.Math.Between(-10, 10);
+    const offsetY = Phaser.Math.Between(-5, 5);
+    
+    this.logoContainer.x = (GAME_WIDTH/2) + offsetX;
+    this.logoContainer.y = (GAME_HEIGHT * 0.25) + offsetY;
+
+    this.time.delayedCall(50, () => {
+        this.logoContainer.x = GAME_WIDTH/2;
+        this.logoContainer.y = GAME_HEIGHT * 0.25;
     });
   }
 
   private createDataDayTicker(): void {
-    const barHeight = 45;
-    const y = GAME_HEIGHT - barHeight/2;
+    // Bottom Ticker Bar
+    const h = 50;
+    const y = GAME_HEIGHT - h/2;
+    
+    // Background Strip (Black/Red)
+    const bg = this.add.rectangle(GAME_WIDTH/2, y, GAME_WIDTH, h, 0x000000).setDepth(5);
+    const border = this.add.rectangle(GAME_WIDTH/2, y - h/2, GAME_WIDTH, 4, 0xff0000).setDepth(6);
 
-    const bg = this.add.rectangle(GAME_WIDTH/2, y, GAME_WIDTH, barHeight, YAK_COLORS.bgDark).setDepth(90);
-    const border = this.add.rectangle(GAME_WIDTH/2, y - barHeight/2, GAME_WIDTH, 3, YAK_COLORS.primary).setDepth(91);
-
+    // Deep Cut Lore Headlines
     const headlines = [
         "BREAKING: TJ HITS THE BUTTON",
         "BRANDON WALKER: 'I AM NOT A MORON'",
@@ -379,137 +368,332 @@ export class BootScene extends Phaser.Scene {
         "WET WHEEL: SPINNING..."
     ];
 
-    const textContent = headlines.join("   ///   ") + "   ///   ";
-
-    this.tickerText = this.add.text(GAME_WIDTH, y, textContent, {
-        fontFamily: YAK_FONTS.mono,
-        fontSize: '20px',
-        color: YAK_COLORS.textGold,
-        fontStyle: 'bold',
-        padding: { top: 12, bottom: 12 }
-    }).setOrigin(0, 0.5).setDepth(92);
+    const text = headlines.join("   ///   ") + "   ///   " + headlines.join("   ///   ");
+    
+    this.tickerContainer = this.add.container(GAME_WIDTH, y);
+    const t = this.add.text(0, 0, text, {
+        fontFamily: 'Courier New', fontSize: '24px', color: '#00ff00', fontStyle: 'bold'
+    }).setOrigin(0, 0.5);
+    
+    this.tickerContainer.add(t);
+    this.tickerContainer.setDepth(7); // Just above floor, below balls
   }
 
-  private startGraffitiLoop(): void {
-    const words = ["10X", "WET", "TANK", "VIBES", "DRAIN", "CHEAH", "SCOOF", "PUKE"];
-    const colors = [YAK_COLORS.textOrange, YAK_COLORS.textGold, YAK_COLORS.textGreen, YAK_COLORS.textRed, '#1e88e5', '#8e24aa'];
+  private createStationPreview(): void {
+    // Minimalist dots to show the 6 stations
+    const startX = GAME_WIDTH/2 - 150;
+    const y = GAME_HEIGHT * 0.55;
+    
+    STATIONS.forEach((s, i) => {
+        const x = startX + (i * 60);
+        this.add.circle(x, y, 8, s.color).setStrokeStyle(2, 0x000000).setDepth(90);
+    });
+  }
 
-    this.time.addEvent({
-        delay: 1500,
-        loop: true,
-        callback: () => {
-            const text = words[Phaser.Math.Between(0, words.length-1)];
-            const color = colors[Phaser.Math.Between(0, colors.length-1)];
-            const x = Phaser.Math.Between(50, GAME_WIDTH-50);
-            const y = Phaser.Math.Between(100, GAME_HEIGHT-150);
-
-            const g = this.add.text(x, y, text, {
-                fontFamily: 'Arial Black',
-                fontSize: Math.random() > 0.8 ? '52px' : '28px',
-                color: color,
-                stroke: '#000000',
-                strokeThickness: 5
-            }).setOrigin(0.5).setRotation(Phaser.Math.Between(-0.5, 0.5)).setAlpha(0);
-
-            this.tweens.add({
-                targets: g,
-                alpha: 0.4,
-                scale: 1.5,
-                duration: 1000,
-                yoyo: true,
-                onComplete: () => g.destroy()
-            });
+  private setupInteractions(): void {
+    // Graffiti System: Click empty space to stamp
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        // Only if not clicking a button
+        if (pointer.y < GAME_HEIGHT - 100 && pointer.y > 100) {
+            this.spawnGraffiti(pointer.x, pointer.y);
         }
+    });
+  }
+
+  private spawnGraffiti(x: number, y: number): void {
+    const words = ["10X", "WET", "CHEAH", "TANK", "VIBES", "SCOOF"];
+    const word = words[Math.floor(Math.random() * words.length)];
+    
+    const text = this.add.text(x, y, word, {
+        fontFamily: 'Arial Black',
+        fontSize: '48px',
+        color: Math.random() > 0.5 ? '#e74c3c' : '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 6
+    }).setOrigin(0.5);
+    
+    text.setRotation((Math.random() - 0.5) * 0.5);
+    text.setDepth(2); // On the wall/floor
+
+    // Pop and Fade
+    this.tweens.add({
+        targets: text,
+        scale: { from: 0, to: 1 },
+        alpha: { from: 1, to: 0 },
+        y: y - 50,
+        duration: 1500,
+        ease: 'Back.out',
+        onComplete: () => text.destroy()
     });
   }
 
   private startGame(): void {
-    this.cameras.main.flash(800, 255, 255, 255); 
-    this.time.delayedCall(500, () => {
+    this.cameras.main.flash(1000, 255, 255, 255);
+    this.time.delayedCall(800, () => {
         this.scene.start('RunScene', { isRestart: true });
     });
   }
 
-  // =================================================================================================
-  //  ASSET GENERATION
-  // =================================================================================================
-
-  private createLoadingUI(): void {
-    const bg = this.add.rectangle(GAME_WIDTH/2, GAME_HEIGHT/2, 200, 10, 0x333333);
-    const bar = this.add.rectangle(GAME_WIDTH/2 - 100, GAME_HEIGHT/2, 0, 10, 0xe74c3c).setOrigin(0, 0.5);
-    this.load.on('progress', (val: number) => { bar.width = 200 * val; });
-    this.load.on('complete', () => { bg.destroy(); bar.destroy(); });
+  private initFirebase(): void {
+    try {
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      this.registry.set('firebase', { app, db });
+    } catch (e) {}
   }
 
+  private createLoadingUI(): void { 
+      // Minimal loader bar
+      const bar = this.add.rectangle(GAME_WIDTH/2, GAME_HEIGHT/2, 0, 4, 0xffffff);
+      this.load.on('progress', (p: number) => {
+          bar.width = 200 * p;
+      });
+      this.load.on('complete', () => bar.destroy());
+  }
+
+  // =================================================================
+  //  ASSET GENERATION FACTORY (THE BEEF)
+  //  Procedurally generates high-res assets so no PNGs are needed.
+  // =================================================================
+
   private generateGameTextures(): void {
-    // Basketball
-    const b = this.make.graphics({x:0,y:0}); b.fillStyle(0xe67e22); b.fillCircle(25,25,25); 
-    b.lineStyle(2, 0x000000); b.strokeCircle(25,25,25);
-    b.generateTexture('basketball',50,50); b.destroy();
+    this.generateBasketball();
+    this.generateFootball();
+    this.generateSoccerball();
+    this.generateWiffleball();
+  }
 
-    // Soccer
-    const s = this.make.graphics({x:0,y:0}); s.fillStyle(0xffffff); s.fillCircle(22,22,22); 
-    s.fillStyle(0x000000); s.fillCircle(22,22,8); 
-    s.generateTexture('soccerball',44,44); s.destroy();
+  private generateBasketball(): void {
+    const size = 128; // High res
+    const g = this.make.graphics({x:0, y:0});
+    
+    // 1. Base Orange Texture (Stippled)
+    g.fillStyle(0xd35400); // Darker orange base
+    g.fillCircle(size/2, size/2, size/2);
+    g.fillStyle(0xe67e22); // Main orange
+    g.fillCircle(size/2, size/2, size/2 - 2);
 
-    // Wiffle
-    const w = this.make.graphics({x:0,y:0}); w.fillStyle(0xffffff); w.fillCircle(18,18,18);
-    w.fillStyle(0xdddddd); w.fillCircle(18,18,6);
-    w.generateTexture('wiffleball',36,36); w.destroy();
+    // 2. Black Seams (Using Arcs instead of Bezier)
+    g.lineStyle(4, 0x1a1a1a);
+    
+    // Cross
+    g.beginPath();
+    g.moveTo(size/2, 0); g.lineTo(size/2, size); // Vertical
+    g.moveTo(0, size/2); g.lineTo(size, size/2); // Horizontal
+    g.strokePath();
 
-    // Beanbag
-    const bb = this.make.graphics({x:0,y:0}); bb.fillStyle(0xc0392b); bb.fillRoundedRect(0,0,32,32,8); 
-    bb.generateTexture('beanbag',32,32); bb.destroy();
+    // Curves
+    g.beginPath();
+    // Left Curve: arc centered far to right
+    g.arc(size * 1.5, size/2, size * 1.1, Phaser.Math.DegToRad(160), Phaser.Math.DegToRad(200), false);
+    g.strokePath();
 
-    // Football (NEW)
-    const fb = this.make.graphics({x:0,y:0});
-    fb.fillStyle(0x5d4037); // Brown leather
-    fb.fillEllipse(30, 20, 60, 36);
-    fb.lineStyle(2, 0xffffff);
-    fb.lineBetween(10, 20, 50, 20); // Laces
-    fb.lineBetween(15, 15, 15, 25);
-    fb.lineBetween(25, 15, 25, 25);
-    fb.lineBetween(35, 15, 35, 25);
-    fb.lineBetween(45, 15, 45, 25);
-    fb.generateTexture('football', 60, 40);
-    fb.destroy();
+    g.beginPath();
+    // Right Curve: arc centered far to left
+    g.arc(-size * 0.5, size/2, size * 1.1, Phaser.Math.DegToRad(-20), Phaser.Math.DegToRad(20), false);
+    g.strokePath();
+
+    // 3. Highlight
+    g.fillStyle(0xffffff, 0.2);
+    g.fillCircle(size*0.3, size*0.3, 10);
+
+    g.generateTexture('basketball_hd', size, size);
+    g.destroy();
+  }
+
+  private generateFootball(): void {
+    const w = 120, h = 80;
+    const g = this.make.graphics({x:0, y:0});
+
+    // 1. Base Brown Leather
+    g.fillStyle(0x5d4037);
+    g.fillEllipse(w/2, h/2, w, h);
+    
+    // 2. White Stripes (Ends)
+    g.lineStyle(3, 0xffffff);
+    g.beginPath();
+    g.arc(w*0.25, h/2, h*0.4, -Math.PI/3, Math.PI/3);
+    g.strokePath();
+    g.beginPath();
+    g.arc(w*0.75, h/2, h*0.4, Math.PI*0.66, Math.PI*1.33);
+    g.strokePath();
+
+    // 3. The Laces (Detailed)
+    g.fillStyle(0xffffff);
+    const laceW = 40, laceH = 15;
+    g.fillRect(w/2 - laceW/2, h/2 - laceH/2, laceW, laceH); // Base white rect
+    
+    // Individual laces
+    g.lineStyle(2, 0xcccccc);
+    for(let i=0; i<=5; i++) {
+        const lx = (w/2 - laceW/2) + (i * (laceW/5));
+        g.lineBetween(lx, h/2 - laceH/2, lx, h/2 + laceH/2);
+    }
+
+    g.generateTexture('football_hd', w, h);
+    g.destroy();
+  }
+
+  private generateSoccerball(): void {
+    const size = 128;
+    const g = this.make.graphics({x:0, y:0});
+
+    g.fillStyle(0xffffff);
+    g.fillCircle(size/2, size/2, size/2);
+    g.lineStyle(2, 0xdddddd);
+    g.strokeCircle(size/2, size/2, size/2);
+
+    // Pentagons (Black spots)
+    g.fillStyle(0x2c3e50);
+    const spots = [
+        {x: 0.5, y: 0.5}, {x: 0.2, y: 0.3}, {x: 0.8, y: 0.3},
+        {x: 0.2, y: 0.7}, {x: 0.8, y: 0.7}
+    ];
+
+    spots.forEach(s => {
+        g.fillCircle(size*s.x, size*s.y, size*0.12);
+    });
+
+    g.generateTexture('soccer_hd', size, size);
+    g.destroy();
+  }
+
+  private generateWiffleball(): void {
+    const size = 96;
+    const g = this.make.graphics({x:0, y:0});
+
+    // Base White Plastic
+    g.fillStyle(0xecf0f1);
+    g.fillCircle(size/2, size/2, size/2);
+    
+    // Shading
+    g.fillStyle(0xbdc3c7);
+    g.fillCircle(size/2, size/2, size/2 - 4); // Inner rim
+
+    // Holes (The Wiffle Look)
+    g.fillStyle(0x95a5a6); // Darker inside holes
+    // Central band of holes
+    for(let i=0; i<8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        const hx = size/2 + Math.cos(angle) * (size*0.3);
+        const hy = size/2 + Math.sin(angle) * (size*0.3);
+        
+        // Elongated holes
+        g.fillEllipse(hx, hy, 8, 14);
+    }
+
+    g.generateTexture('wiffle_hd', size, size);
+    g.destroy();
   }
 
   private generateYakTextures(): void {
-    // Wet Wheel
-    const size = 256;
-    const wheel = this.make.graphics({x:0,y:0});
-    const colors = [
-        YAK_COLORS.vibrantRed, YAK_COLORS.vibrantOrange, YAK_COLORS.vibrantYellow,
-        YAK_COLORS.vibrantGreen, YAK_COLORS.vibrantBlue, YAK_COLORS.vibrantPurple
-    ];
+    // 1. Wet Wheel HD
+    const size = 512;
+    const g = this.make.graphics({x:0, y:0});
+    const colors = [0xe74c3c, 0x3498db, 0xf1c40f, 0x2ecc71, 0x9b59b6, 0xe67e22];
+    
     for(let i=0; i<6; i++) {
-        wheel.fillStyle(colors[i]);
-        wheel.slice(size/2, size/2, size/2, i*(Math.PI/3), (i+1)*(Math.PI/3));
-        wheel.fillPath();
+        g.fillStyle(colors[i]);
+        g.slice(size/2, size/2, size/2, i*(Math.PI/3), (i+1)*(Math.PI/3));
+        g.fillPath();
     }
-    wheel.lineStyle(5, 0xffffff);
-    wheel.strokeCircle(size/2, size/2, size/2);
-    wheel.generateTexture('wet_wheel', size, size);
-    wheel.destroy();
+    
+    // Wheel Rim
+    g.lineStyle(10, 0xffffff);
+    g.strokeCircle(size/2, size/2, size/2 - 5);
+    
+    // Center Nub
+    g.fillStyle(0x333333);
+    g.fillCircle(size/2, size/2, 40);
+    g.fillStyle(0xffffff);
+    g.fillCircle(size/2, size/2, 10);
+
+    g.generateTexture('wet_wheel_hd', size, size);
+    g.destroy();
+
+    // 2. Easy Button HD
+    const btnW = 160, btnH = 160;
+    const b = this.make.graphics({x:0, y:0});
+    
+    // Silver Base
+    b.fillStyle(0xbdc3c7);
+    b.fillCircle(btnW/2, btnH/2, 75);
+    b.lineStyle(4, 0x7f8c8d);
+    b.strokeCircle(btnW/2, btnH/2, 75);
+
+    // Red Dome
+    b.fillStyle(0xe74c3c); // Base Red
+    b.fillCircle(btnW/2, btnH/2, 60);
+    
+    // Gloss/Shine (Top)
+    b.fillStyle(0xffffff, 0.4);
+    b.fillEllipse(btnW/2, btnH*0.35, 40, 20);
+
+    b.generateTexture('easy_button_hd', btnW, btnH);
+    b.destroy();
   }
 
   private generatePixelCrew(): void {
-    const colors = [0x3498db, 0x8e44ad, 0xe67e22, 0x2ecc71, 0x7f8c8d, 0xc0392b];
+    // Generates 7 unique heads with specific features
+    const crew = [
+        { color: 0x3498db, name: 'BigCat', glasses: true, hair: 'brown' },
+        { color: 0xc0392b, name: 'Brandon', glasses: false, hair: 'brown', bald: false },
+        { color: 0x2ecc71, name: 'KB', glasses: false, hair: 'black', hat: true },
+        { color: 0xf1c40f, name: 'Nick', glasses: false, hair: 'blonde' },
+        { color: 0x9b59b6, name: 'Sas', glasses: false, hair: 'dark' },
+        { color: 0x7f8c8d, name: 'Zah', glasses: false, hair: 'black', beard: true },
+        { color: 0xe67e22, name: 'Titus', glasses: false, hair: 'brown' }
+    ];
+
+    const size = 64;
     
-    colors.forEach((color, i) => {
-        const g = this.make.graphics({x:0,y:0});
-        g.fillStyle(0xffdbac); g.fillRect(4,4,56,56);
-        g.fillStyle(0x3e2723); g.fillRect(4,0,56,16);
-        g.fillRect(0,4,8,24); g.fillRect(56,4,8,24); 
-        g.fillStyle(color); g.fillRect(4,52,56,12);
-        g.fillStyle(0x000000);
-        if(i === 0) { 
-            g.fillRect(12, 24, 16, 12); g.fillRect(36, 24, 16, 12); g.fillRect(28, 28, 8, 4); 
-        } else { 
-            g.fillRect(16, 28, 8, 8); g.fillRect(40, 28, 8, 8); 
+    crew.forEach((member, i) => {
+        const g = this.make.graphics({x:0, y:0});
+        
+        // 1. Skin Base
+        g.fillStyle(0xffdbac);
+        g.fillRect(8, 8, 48, 48);
+
+        // 2. Hair
+        g.fillStyle(member.hair === 'blonde' ? 0xf1c40f : 0x3e2723);
+        if(!member.hat) {
+            g.fillRect(8, 0, 48, 12); // Top hair
+            g.fillRect(4, 8, 8, 24);  // Sideburns
+            g.fillRect(52, 8, 8, 24);
+        } else {
+            // KB's Hat (Beanie)
+            g.fillStyle(0x27ae60);
+            g.fillRect(6, 0, 52, 16);
         }
-        g.generateTexture(`crew_${i}`, 64, 64);
+
+        // 3. Facial Features
+        g.fillStyle(0x000000);
+        
+        if(member.glasses) {
+            // Sunglasses (Big Cat)
+            g.fillRect(14, 20, 16, 10);
+            g.fillRect(34, 20, 16, 10);
+            g.fillRect(28, 24, 8, 4); // Bridge
+        } else {
+            // Eyes
+            g.fillRect(18, 24, 6, 6);
+            g.fillRect(40, 24, 6, 6);
+        }
+
+        // Beard (Zah/Big Cat)
+        if(member.beard || member.name === 'BigCat') {
+            g.fillStyle(0x3e2723);
+            g.fillRect(16, 40, 32, 8); // Goatee/Beard area
+        } else {
+            // Smile
+            g.fillRect(20, 42, 24, 4);
+        }
+
+        // 4. Shirt Collar
+        g.fillStyle(member.color);
+        g.fillRect(12, 56, 40, 8);
+
+        g.generateTexture(`crew_head_${i}`, size, size);
         g.destroy();
     });
   }
