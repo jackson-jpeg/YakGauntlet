@@ -1,33 +1,72 @@
 import type { LeaderboardEntry } from '../types';
+import { ErrorHandler, MemoryStorage } from '../utils/ErrorHandler';
 
 const LEADERBOARD_KEY = 'yak_gauntlet_leaderboard';
 const MAX_ENTRIES = 10;
 
 class LeaderboardServiceClass {
   private leaderboard: LeaderboardEntry[] = [];
+  private useMemoryStorage = false;
 
   constructor() {
     this.loadLeaderboard();
   }
 
   private loadLeaderboard(): void {
-    try {
-      const stored = localStorage.getItem(LEADERBOARD_KEY);
-      if (stored) {
-        this.leaderboard = JSON.parse(stored);
-      }
-    } catch (error) {
-      console.error('Failed to load leaderboard:', error);
-      this.leaderboard = [];
-    }
+    ErrorHandler.withErrorHandlingSync(
+      'LeaderboardService',
+      'loadLeaderboard',
+      () => {
+        // Check if localStorage is available
+        if (!ErrorHandler.isLocalStorageAvailable()) {
+          console.warn('localStorage not available, using memory storage');
+          this.useMemoryStorage = true;
+          const memData = MemoryStorage.getItem(LEADERBOARD_KEY);
+          if (memData) {
+            this.leaderboard = JSON.parse(memData);
+          }
+          return;
+        }
+
+        const stored = localStorage.getItem(LEADERBOARD_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          // Validate structure
+          if (Array.isArray(parsed)) {
+            this.leaderboard = parsed.filter(entry =>
+              entry &&
+              typeof entry.username === 'string' &&
+              typeof entry.time_ms === 'number' &&
+              typeof entry.wet === 'boolean'
+            );
+          }
+        }
+      },
+      undefined
+    );
   }
 
   private saveLeaderboard(): void {
-    try {
-      localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(this.leaderboard));
-    } catch (error) {
-      console.error('Failed to save leaderboard:', error);
-    }
+    ErrorHandler.withErrorHandlingSync(
+      'LeaderboardService',
+      'saveLeaderboard',
+      () => {
+        const data = JSON.stringify(this.leaderboard);
+
+        if (this.useMemoryStorage) {
+          MemoryStorage.setItem(LEADERBOARD_KEY, data);
+        } else {
+          const success = ErrorHandler.setLocalStorage(LEADERBOARD_KEY, data);
+          if (!success) {
+            // Fallback to memory storage
+            console.warn('Falling back to memory storage');
+            this.useMemoryStorage = true;
+            MemoryStorage.setItem(LEADERBOARD_KEY, data);
+          }
+        }
+      },
+      undefined
+    );
   }
 
   addEntry(entry: LeaderboardEntry): number {

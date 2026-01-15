@@ -5,6 +5,7 @@ import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
 import { getCharacterQuote } from '../data/characterQuotes';
 import { createArenaAtmosphere } from '../utils/StudioAtmosphere';
+import { AudioSystem } from '../utils/AudioSystem';
 import type { CharacterId } from '../types';
 
 export class FootballScene extends Phaser.Scene {
@@ -49,6 +50,9 @@ export class FootballScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Initialize audio
+    AudioSystem.init();
+
     this.createBackground();
 
     this.trail = this.add.graphics().setDepth(5);
@@ -83,6 +87,10 @@ export class FootballScene extends Phaser.Scene {
     this.input.on('pointerdown', this.onPointerDown, this);
     this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
+
+    // Entrance effects
+    this.cameras.main.fadeIn(400, 0, 0, 0);
+    AudioSystem.playBeep(1.0);
   }
 
   private createBackground(): void {
@@ -455,6 +463,9 @@ export class FootballScene extends Phaser.Scene {
   }
 
   private throwFootball(vx: number, vy: number): void {
+    // Audio
+    AudioSystem.playSwoosh();
+
     let velocityX = vx;
     let velocityY = vy;
     const gravity = 0.35;
@@ -557,6 +568,10 @@ export class FootballScene extends Phaser.Scene {
   private handleSuccess(): void {
     this.trail.clear();
 
+    // Audio
+    AudioSystem.playSuccess();
+    this.time.delayedCall(100, () => AudioSystem.playCrowdCheer());
+
     // Animate through tire
     this.tweens.add({
       targets: this.football,
@@ -590,6 +605,7 @@ export class FootballScene extends Phaser.Scene {
     this.showCharacterQuote(quote, YAK_COLORS.success);
 
     showSuccessEffect(this, this.targetX, this.targetY, getRandomSuccess(), () => {
+      AudioSystem.playWhoosh();
       this.scene.start('Corner3RightScene');
     });
   }
@@ -598,6 +614,9 @@ export class FootballScene extends Phaser.Scene {
     this.missCount++;
     this.ui.missText.setText(`Misses: ${this.missCount}`);
     GameStateService.recordMiss('football');
+
+    // Audio
+    AudioSystem.playBounce(0.8);
 
     this.cameras.main.shake(200, 0.015);
 
@@ -636,6 +655,9 @@ export class FootballScene extends Phaser.Scene {
     this.missCount++;
     this.ui.missText.setText(`Misses: ${this.missCount}`);
     GameStateService.recordMiss('football');
+
+    // Audio
+    AudioSystem.playFail();
 
     // Get character quote
     const state = GameStateService.getState();

@@ -5,6 +5,7 @@ import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
 import { getCharacterQuote } from '../data/characterQuotes';
 import { createArenaAtmosphere } from '../utils/StudioAtmosphere';
+import { AudioSystem } from '../utils/AudioSystem';
 import type { CharacterId } from '../types';
 
 interface BallState {
@@ -78,6 +79,8 @@ export class Corner3RightScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Initialize audio
+    AudioSystem.init();
     // Calculate rim geometry
     this.rimCenterX = this.BACKBOARD_X + 35;
     this.leftRimCenter = { x: this.rimCenterX - this.RIM_RADIUS + this.RIM_THICKNESS, y: this.HOOP_Y };
@@ -127,6 +130,10 @@ export class Corner3RightScene extends Phaser.Scene {
     this.input.on('pointerdown', this.onPointerDown, this);
     this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
+
+    // Entrance effects
+    this.cameras.main.fadeIn(400, 0, 0, 0);
+    AudioSystem.playBeep(1.2);
   }
 
   private createBackground(): void {
@@ -531,6 +538,9 @@ export class Corner3RightScene extends Phaser.Scene {
     this.instructionText.setVisible(false);
     GameStateService.startTimer();
 
+    // Audio
+    AudioSystem.playSwoosh();
+
     const power = Math.min(distance / 5, 50);
     this.ballState.vx = (dx / distance) * power * 0.55;
     this.ballState.vy = (dy / distance) * power * 0.95;
@@ -687,6 +697,10 @@ export class Corner3RightScene extends Phaser.Scene {
     this.ballState.vy *= 0.85;
 
     this.rimBounces++;
+
+    // Audio
+    AudioSystem.playBounce(0.6);
+
     this.cameras.main.shake(40, 0.005);
     this.showRimEffect(rimX, rimY);
     this.animateNet(0.5);
@@ -765,6 +779,10 @@ export class Corner3RightScene extends Phaser.Scene {
   private handleSuccess(): void {
     this.hasLaunched = false;
     this.trail.clear();
+
+    // Audio
+    AudioSystem.playSuccess();
+    this.time.delayedCall(100, () => AudioSystem.playCrowdCheer());
 
     // Determine shot type
     let shotType = 'SWISH!';
@@ -856,6 +874,7 @@ export class Corner3RightScene extends Phaser.Scene {
     this.showCharacterQuote(quote, YAK_COLORS.success);
 
     showSuccessEffect(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, getRandomSuccess(), () => {
+      AudioSystem.playWhoosh();
       this.scene.start('Corner3LeftScene');
     });
   }
@@ -865,6 +884,9 @@ export class Corner3RightScene extends Phaser.Scene {
     this.missCount++;
     this.ui.missText.setText(`Misses: ${this.missCount}`);
     GameStateService.recordMiss('corner3_right');
+
+    // Audio
+    AudioSystem.playFail();
 
     this.cameras.main.shake(100, 0.01);
 
@@ -901,6 +923,9 @@ export class Corner3RightScene extends Phaser.Scene {
     this.missCount++;
     this.ui.missText.setText(`Misses: ${this.missCount}`);
     GameStateService.recordMiss('corner3_right');
+
+    // Audio
+    AudioSystem.playFail();
 
     // Get character quote
     const state = GameStateService.getState();

@@ -5,6 +5,9 @@ import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
 import { createConfetti, createRipple, shakeCamera, flashScreen } from '../utils/VisualEffects';
 import { getCharacterQuote } from '../data/characterQuotes';
+import { AudioSystem } from '../utils/AudioSystem';
+import { SceneEnhancer } from '../utils/SceneEnhancer';
+import { EnhancedVisuals } from '../utils/EnhancedVisuals';
 import type { CharacterId } from '../types';
 
 export class RunScene extends Phaser.Scene {
@@ -45,6 +48,9 @@ export class RunScene extends Phaser.Scene {
   create(): void {
     GameStateService.initNewRun();
 
+    // Initialize audio
+    AudioSystem.init();
+
     this.createBackground();
 
     // Graphics layers
@@ -79,6 +85,10 @@ export class RunScene extends Phaser.Scene {
     this.input.on('pointerdown', this.onPointerDown, this);
     this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
+
+    // Entrance effects
+    this.cameras.main.fadeIn(400, 0, 0, 0);
+    AudioSystem.playBeep(1.2);
   }
 
   private createBackground(): void {
@@ -278,9 +288,10 @@ export class RunScene extends Phaser.Scene {
     this.aimLine.beginPath();
     this.aimLine.moveTo(this.bagContainer.x, this.bagContainer.y);
     const lineLen = Math.min(distance * 0.7, 100);
+    // Show inverted direction (aim line goes toward target)
     this.aimLine.lineTo(
       this.bagContainer.x + (dx / distance) * lineLen,
-      this.bagContainer.y + (dy / distance) * lineLen
+      this.bagContainer.y - (dy / distance) * lineLen
     );
     this.aimLine.strokePath();
 
@@ -309,12 +320,16 @@ export class RunScene extends Phaser.Scene {
 
     const power = Math.min(distance / 7, 45);
     const vx = (dx / distance) * power * 0.35;
-    const vy = (dy / distance) * power * 1.1;
+    // INVERTED: Drag down (positive dy) = throw up (negative vy)
+    const vy = -(dy / distance) * power * 1.1;
 
     this.launchBag(vx, vy);
   }
 
   private launchBag(vx: number, vy: number): void {
+    // Launch audio
+    AudioSystem.playSwoosh();
+
     let velocityX = vx;
     let velocityY = vy;
     const gravity = 0.5; // Heavier gravity for "beanbag" feel
@@ -413,11 +428,15 @@ export class RunScene extends Phaser.Scene {
   private handleSuccess(): void {
     this.trail.clear();
 
-    // Sound/Visuals
+    // Audio
+    AudioSystem.playSuccess();
+    this.time.delayedCall(100, () => AudioSystem.playCrowdCheer());
+
+    // Visuals
     flashScreen(this, 'green', 150);
     shakeCamera(this, 'light');
     createRipple(this, this.holeX, this.holeY, { color: YAK_COLORS.successBright, endRadius: 80, duration: 400 });
-    createConfetti(this, this.holeX, this.holeY, { count: 20 });
+    createConfetti(this, this.holeX, this.holeY, { count: 30 });
 
     // Suck into hole animation
     this.tweens.add({
@@ -442,6 +461,7 @@ export class RunScene extends Phaser.Scene {
     this.showCharacterQuote(quote, 0x4ade80); // Success Green
 
     showSuccessEffect(this, this.holeX, this.holeY, getRandomSuccess(), () => {
+      AudioSystem.playWhoosh();
       this.scene.start('GoalieScene');
     });
   }
@@ -451,8 +471,11 @@ export class RunScene extends Phaser.Scene {
     this.ui.missText.setText(`Misses: ${this.missCount}`);
     GameStateService.recordMiss('cornhole');
 
+    // Audio
+    AudioSystem.playFail();
+
     shakeCamera(this, 'light');
-    
+
     const state = GameStateService.getState();
     const charId = (state?.goalieCharacterId || 'BIG_CAT') as CharacterId;
     const quote = getCharacterQuote(charId, 'miss');

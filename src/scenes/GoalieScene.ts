@@ -7,6 +7,7 @@ import { createConfetti, flashScreen, shakeCamera } from '../utils/VisualEffects
 import { createGoalieSprite } from '../utils/CharacterSprites';
 import { getCharacterQuote, getCharacterName } from '../data/characterQuotes';
 import { CHARACTER_MODIFIERS } from '../types';
+import { AudioSystem } from '../utils/AudioSystem';
 
 export class GoalieScene extends Phaser.Scene {
   // Ball
@@ -64,6 +65,9 @@ export class GoalieScene extends Phaser.Scene {
     const state = GameStateService.getState();
     this.goalieCharacterId = state?.goalieCharacterId || 'BIG_CAT';
 
+    // Initialize audio
+    AudioSystem.init();
+
     this.createBackground();
     this.createStadium();
 
@@ -99,6 +103,10 @@ export class GoalieScene extends Phaser.Scene {
     this.input.on('pointerdown', this.onPointerDown, this);
     this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
+
+    // Entrance effects
+    this.cameras.main.fadeIn(400, 0, 0, 0);
+    AudioSystem.playBeep(1.3);
   }
 
   private createBackground(): void {
@@ -476,6 +484,9 @@ export class GoalieScene extends Phaser.Scene {
   }
 
   private kickBall(vx: number, vy: number): void {
+    // Kick sound
+    AudioSystem.playSwoosh();
+
     let velocityX = vx;
     let velocityY = vy;
 
@@ -584,6 +595,10 @@ export class GoalieScene extends Phaser.Scene {
   private handleGoal(): void {
     this.trail.clear();
 
+    // Audio
+    AudioSystem.playSuccess();
+    this.time.delayedCall(100, () => AudioSystem.playCrowdCheer());
+
     // Visual effects
     flashScreen(this, 'green', 150);
     shakeCamera(this, 'light');
@@ -637,6 +652,7 @@ export class GoalieScene extends Phaser.Scene {
     this.showGoalieQuote(quote, YAK_COLORS.danger);
 
     showSuccessEffect(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, 'GOAL!', () => {
+      AudioSystem.playWhoosh();
       this.scene.start('WiffleScene');
     });
   }
@@ -717,6 +733,9 @@ export class GoalieScene extends Phaser.Scene {
     this.ui.missText.setText(`Saves: ${this.missCount}`);
     GameStateService.recordMiss('goalie');
 
+    // Audio
+    AudioSystem.playFail();
+
     // Goalie dive animation
     const diveDir = this.ballContainer.x < GAME_WIDTH / 2 ? -1 : 1;
     this.tweens.add({
@@ -751,6 +770,9 @@ export class GoalieScene extends Phaser.Scene {
     this.ui.missText.setText(`Saves: ${this.missCount}`);
     GameStateService.recordMiss('goalie');
 
+    // Audio
+    AudioSystem.playBounce(0.9);
+
     this.cameras.main.shake(250, 0.02);
 
     const flash = this.add.circle(this.ballContainer.x, this.ballContainer.y, 25, 0xffffff).setDepth(150);
@@ -780,6 +802,9 @@ export class GoalieScene extends Phaser.Scene {
     this.missCount++;
     this.ui.missText.setText(`Saves: ${this.missCount}`);
     GameStateService.recordMiss('goalie');
+
+    // Audio
+    AudioSystem.playFail();
 
     showFailEffect(this, this.ballContainer.x, Math.min(this.ballContainer.y, 250), message);
 

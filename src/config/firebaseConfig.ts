@@ -1,9 +1,32 @@
+// Validate that all required environment variables are present
+const requiredEnvVars = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID',
+  'VITE_FIREBASE_MEASUREMENT_ID',
+] as const;
+
+const missingVars = requiredEnvVars.filter(
+  (varName) => !import.meta.env[varName]
+);
+
+if (missingVars.length > 0) {
+  console.error(
+    'Missing required environment variables:',
+    missingVars.join(', ')
+  );
+  console.error('Please check your .env file and ensure all variables are set.');
+}
+
 export const firebaseConfig = {
-  apiKey: "AIzaSyCIUI6geoswtAZfiuumva3ZC75QLhJSnDk",
-  authDomain: "yakgaunlet.firebaseapp.com",
-  projectId: "yakgaunlet",
-  storageBucket: "yakgaunlet.firebasestorage.app",
-  messagingSenderId: "893788584554",
-  appId: "1:893788584554:web:68b23ac03255cfeec46813",
-  measurementId: "G-XBNJXBDNRD"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };

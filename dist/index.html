@@ -18,7 +18,7 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background-color: #1a1a2e;
+        background-color: #0f1419;
         touch-action: none;
       }
 
@@ -28,13 +28,17 @@
         display: flex;
         justify-content: center;
         align-items: center;
+        background: radial-gradient(circle at center, #1a1a2e 0%, #0f1419 100%);
       }
 
       canvas {
         display: block;
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: crisp-edges;
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.8);
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-CFWvyEFH.js"></script>
+    <script type="module" crossorigin src="/assets/index-DhJU1qms.js"></script>
   </head>
   <body>
     <div id="game-container"></div>

@@ -1,4 +1,5 @@
 import type { RunState, StationId, CharacterId } from '../types';
+import { ErrorHandler } from '../utils/ErrorHandler';
 
 const STATION_ORDER: StationId[] = [
   'cornhole',
@@ -26,29 +27,52 @@ class GameStateServiceClass {
   private runState: RunState | null = null;
 
   initNewRun(): RunState {
-    const runId = crypto.randomUUID();
+    return ErrorHandler.withErrorHandlingSync(
+      'GameStateService',
+      'initNewRun',
+      () => {
+        const runId = crypto.randomUUID();
 
-    // Seed random goalie selection based on runId
-    const goalieIndex = this.hashStringToIndex(runId, CHARACTERS.length);
+        // Seed random goalie selection based on runId
+        const goalieIndex = this.hashStringToIndex(runId, CHARACTERS.length);
 
-    this.runState = {
-      runId,
-      startTimeMs: 0, // Set when first station begins
-      endTimeMs: null,
-      currentStationId: STATION_ORDER[0],
-      missCountByStation: {
-        cornhole: 0,
-        goalie: 0,
-        wiffle: 0,
-        football: 0,
-        corner3_right: 0,
-        corner3_left: 0,
+        this.runState = {
+          runId,
+          startTimeMs: 0, // Set when first station begins
+          endTimeMs: null,
+          currentStationId: STATION_ORDER[0],
+          missCountByStation: {
+            cornhole: 0,
+            goalie: 0,
+            wiffle: 0,
+            football: 0,
+            corner3_right: 0,
+            corner3_left: 0,
+          },
+          wet: false,
+          goalieCharacterId: CHARACTERS[goalieIndex],
+        };
+
+        return this.runState;
       },
-      wet: false,
-      goalieCharacterId: CHARACTERS[goalieIndex],
-    };
-
-    return this.runState;
+      // Fallback: return a default state if initialization fails
+      {
+        runId: 'fallback-' + Date.now(),
+        startTimeMs: 0,
+        endTimeMs: null,
+        currentStationId: STATION_ORDER[0],
+        missCountByStation: {
+          cornhole: 0,
+          goalie: 0,
+          wiffle: 0,
+          football: 0,
+          corner3_right: 0,
+          corner3_left: 0,
+        },
+        wet: false,
+        goalieCharacterId: CHARACTERS[0],
+      }
+    );
   }
 
   getState(): RunState | null {
@@ -86,21 +110,46 @@ class GameStateServiceClass {
   }
 
   recordMiss(stationId: StationId): void {
-    if (this.runState) {
-      this.runState.missCountByStation[stationId]++;
-    }
+    ErrorHandler.withErrorHandlingSync(
+      'GameStateService',
+      'recordMiss',
+      () => {
+        if (!this.runState) {
+          throw new Error('No active run state');
+        }
+        if (!STATION_ORDER.includes(stationId)) {
+          throw new Error(`Invalid station ID: ${stationId}`);
+        }
+        this.runState.missCountByStation[stationId]++;
+      },
+      undefined,
+      { stationId }
+    );
   }
 
   advanceToNextStation(): StationId | null {
-    if (!this.runState) return null;
+    return ErrorHandler.withErrorHandlingSync(
+      'GameStateService',
+      'advanceToNextStation',
+      () => {
+        if (!this.runState) {
+          throw new Error('No active run state');
+        }
 
-    const currentIndex = STATION_ORDER.indexOf(this.runState.currentStationId);
-    if (currentIndex < STATION_ORDER.length - 1) {
-      this.runState.currentStationId = STATION_ORDER[currentIndex + 1];
-      return this.runState.currentStationId;
-    }
+        const currentIndex = STATION_ORDER.indexOf(this.runState.currentStationId);
+        if (currentIndex === -1) {
+          throw new Error(`Invalid current station: ${this.runState.currentStationId}`);
+        }
 
-    return null; // No more stations
+        if (currentIndex < STATION_ORDER.length - 1) {
+          this.runState.currentStationId = STATION_ORDER[currentIndex + 1];
+          return this.runState.currentStationId;
+        }
+
+        return null; // No more stations
+      },
+      null
+    );
   }
 
   getCurrentStationIndex(): number {

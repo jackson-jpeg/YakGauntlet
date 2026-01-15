@@ -5,6 +5,7 @@ import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
 import { getCharacterQuote } from '../data/characterQuotes';
 import { createStudioBackground } from '../utils/StudioAtmosphere';
+import { AudioSystem } from '../utils/AudioSystem';
 import type { CharacterId } from '../types';
 
 export class WiffleScene extends Phaser.Scene {
@@ -42,6 +43,9 @@ export class WiffleScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Initialize audio
+    AudioSystem.init();
+
     this.createBackground();
     this.trail = this.add.graphics().setDepth(45);
     this.createSweetSpot();
@@ -79,6 +83,10 @@ export class WiffleScene extends Phaser.Scene {
 
     // Tap to swing
     this.input.on('pointerdown', () => this.trySwing());
+
+    // Entrance effects
+    this.cameras.main.fadeIn(400, 0, 0, 0);
+    AudioSystem.playBeep(1.1);
 
     // Start first pitch
     this.time.delayedCall(1500, () => this.throwPitch());
@@ -321,6 +329,9 @@ export class WiffleScene extends Phaser.Scene {
 
     this.isSwinging = true;
 
+    // Audio
+    AudioSystem.playWhoosh();
+
     // Swing animation
     this.tweens.add({
       targets: this.bat,
@@ -396,6 +407,10 @@ export class WiffleScene extends Phaser.Scene {
     this.ballActive = false;
     this.trail.clear();
 
+    // Audio
+    AudioSystem.playExplosion();
+    this.time.delayedCall(100, () => AudioSystem.playCrowdCheer());
+
     // Ball flies toward outfield
     const hitPower = 400 + quality * 200;
     const hitAngle = -1.2 + (Math.random() - 0.5) * 0.4;
@@ -460,6 +475,7 @@ export class WiffleScene extends Phaser.Scene {
     this.showCharacterQuote(quote, YAK_COLORS.success);
 
     showSuccessEffect(this, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 50, hitText, () => {
+      AudioSystem.playWhoosh();
       this.scene.start('FootballScene');
     });
   }
@@ -468,6 +484,9 @@ export class WiffleScene extends Phaser.Scene {
     this.missCount++;
     this.ui.missText.setText(`Strikes: ${this.missCount}`);
     GameStateService.recordMiss('wiffle');
+
+    // Audio
+    AudioSystem.playFail();
 
     // Get character quote
     const state = GameStateService.getState();
