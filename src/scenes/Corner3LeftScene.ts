@@ -858,8 +858,10 @@ export class Corner3LeftScene extends Phaser.Scene {
     this.showCharacterQuote(quote, YAK_COLORS.success);
 
     showSuccessEffect(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, getRandomSuccess(), () => {
+      // Final station complete - stop timer and go to results
+      GameStateService.completeRun();
       AudioSystem.playWhoosh();
-      this.scene.start('QuizScene');
+      this.scene.start('ResultScene');
     });
   }
 

@@ -1,8 +1,27 @@
 # YAK GAUNTLET - Complete Application Architecture & Documentation
 
-**Version:** 6
+**Version:** 6.1 (Major Overhaul)
 **Last Updated:** 2026-01-24
 **Total Codebase:** ~13,713 lines of TypeScript
+
+## Recent Updates (v6.1)
+
+### Critical Bug Fixes
+- **Fixed State Management Loop Bug**: Removed duplicate `GameStateService.initNewRun()` call from RunScene that was causing state corruption. Now properly initialized only in BootScene when starting a new game.
+- **Fixed End-Game Flow**: Corner3LeftScene now correctly transitions to ResultScene instead of forcing players through QuizScene, eliminating the loop bug that sent players back to quiz after entering initials.
+- **Quiz Made Optional**: QuizScene removed from required gauntlet flow - now available as bonus content only.
+
+### Cornhole Physics Overhaul
+- **Realistic Sliding Mechanics**: Beanbags now properly slide on the board with friction-based physics instead of just bouncing
+- **Board Friction**: Separate friction coefficients for air (0.98) vs board surface (0.92)
+- **Minimal Bounce**: Beanbags have realistic low bounce (0.15) when hitting the board
+- **Slide-Into-Hole**: Bags can now slide into the hole from any direction, not just drop straight in
+- **Improved Feedback**: Added "thud" sound effect when bag lands on board
+
+### Game Flow Improvements
+- **Proper State Reset**: Game state now cleanly resets between runs
+- **Timer Management**: Timer properly starts on first station input and stops when final station completes
+- **6-Station Gauntlet**: Cornhole → Goalie → Wiffle → Football → 3PT Right → 3PT Left → Results
 
 ---
 
@@ -108,8 +127,10 @@ Corner3LeftScene (Station 6: 3-Point Left)
 ResultScene (Leaderboard & Results)
 ```
 
-**Optional Bonus:**
-- QuizScene (Sporcle-style trivia)
+**QuizScene (Bonus/Optional):**
+- Not part of main gauntlet flow
+- Available as standalone feature
+- Sporcle-style trivia game
 
 ### 2. Singleton Service Pattern
 

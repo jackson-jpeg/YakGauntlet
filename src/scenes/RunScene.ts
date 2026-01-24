@@ -46,8 +46,6 @@ export class RunScene extends Phaser.Scene {
   }
 
   create(): void {
-    GameStateService.initNewRun();
-
     // Initialize audio
     AudioSystem.init();
 
@@ -333,8 +331,14 @@ export class RunScene extends Phaser.Scene {
     let velocityX = vx;
     let velocityY = vy;
     const gravity = 0.5; // Heavier gravity for "beanbag" feel
-    const friction = 0.98; // Air resistance
-    const floorFriction = 0.8; // Sliding friction
+    const airFriction = 0.98; // Air resistance while flying
+
+    // Board physics constants
+    const boardFriction = 0.92; // Stronger friction when sliding on board
+    const boardBounce = 0.15; // Very low bounce (beanbags don't bounce much)
+
+    let onBoard = false;
+    let stoppedOnBoard = false;
 
     this.trailPoints = [];
     this.trail.clear();
@@ -345,18 +349,61 @@ export class RunScene extends Phaser.Scene {
         return;
       }
 
+      // Apply gravity
       velocityY += gravity;
-      velocityX *= friction;
-      velocityY *= friction;
 
+      // Board collision detection and sliding physics
+      const boardTop = 320 - 110;
+      const boardBottom = 320 + 110;
+      const boardLeft = GAME_WIDTH/2 - 70;
+      const boardRight = GAME_WIDTH/2 + 70;
+
+      const isOverBoard = this.bagContainer.x > boardLeft &&
+                          this.bagContainer.x < boardRight &&
+                          this.bagContainer.y > boardTop &&
+                          this.bagContainer.y < boardBottom;
+
+      // Landing on board
+      if (isOverBoard && velocityY > 0 && !onBoard) {
+        // Initial impact - small bounce then start sliding
+        velocityY = -velocityY * boardBounce;
+        onBoard = true;
+        AudioSystem.playBeep(0.8); // Thud sound
+      }
+
+      // While on board - apply board friction
+      if (onBoard && isOverBoard) {
+        // Strong friction slows the bag down
+        velocityX *= boardFriction;
+        velocityY *= boardFriction;
+
+        // Clamp to board surface (prevent bouncing off)
+        if (this.bagContainer.y < boardTop + 10) {
+          this.bagContainer.y = boardTop + 10;
+          velocityY = Math.max(0, velocityY);
+        }
+        if (this.bagContainer.y > boardBottom - 10) {
+          this.bagContainer.y = boardBottom - 10;
+          velocityY = Math.min(0, velocityY);
+        }
+      } else if (!isOverBoard && onBoard) {
+        // Slid off the board
+        onBoard = false;
+      } else if (!onBoard) {
+        // In air - use air friction
+        velocityX *= airFriction;
+        velocityY *= airFriction;
+      }
+
+      // Update position
       this.bagContainer.x += velocityX;
       this.bagContainer.y += velocityY;
-      this.bagContainer.rotation += velocityX * 0.05; // Spin
+      this.bagContainer.rotation += velocityX * 0.05; // Spin based on horizontal velocity
 
       // Shadow logic
       this.bagShadow.x = this.bagContainer.x;
       // Shadow gets smaller as bag goes "up/back" (y decreases)
-      const depthScale = Math.max(0.2, (this.bagContainer.y - 200) / 600); 
+      const depthScale = Math.max(0.2, (this.bagContainer.y - 200) / 600);
       this.bagShadow.setScale(depthScale * 1.2, depthScale * 0.5);
       this.bagShadow.setAlpha(0.3 * depthScale);
 
@@ -381,41 +428,49 @@ export class RunScene extends Phaser.Scene {
         this.holeX, this.holeY
       );
 
-      // Smaller hitbox for hole
-      if (distToHole < this.holeRadius - 15) {
+      // Can slide into hole from any direction
+      if (distToHole < this.holeRadius - 12) {
         this.events.off('update', updateHandler);
         this.handleSuccess();
         return;
       }
 
-      // 2. Board Collision (Bounce/Slide)
-      const boardTop = 320 - 110;
-      const boardBottom = 320 + 110;
-      const boardLeft = GAME_WIDTH/2 - 70;
-      const boardRight = GAME_WIDTH/2 + 70;
+      // 2. Check if bag has stopped moving
+      const speed = Math.sqrt(velocityX*velocityX + velocityY*velocityY);
 
-      // If landing on board area
-      if (this.bagContainer.x > boardLeft && this.bagContainer.x < boardRight &&
-          this.bagContainer.y > boardTop && this.bagContainer.y < boardBottom) {
-        
-        // If falling down onto it
-        if (velocityY > 0) {
-           velocityY = -velocityY * 0.1; // Tiny bounce, mostly slide
-           velocityX *= 0.7; // Friction
+      // If on board and stopped moving
+      if (onBoard && isOverBoard && speed < 0.15) {
+        if (!stoppedOnBoard) {
+          stoppedOnBoard = true;
+          // Give it a moment to see if it's in the hole
+          this.time.delayedCall(200, () => {
+            // Check distance to hole one more time
+            const finalDist = Phaser.Math.Distance.Between(
+              this.bagContainer.x, this.bagContainer.y,
+              this.holeX, this.holeY
+            );
+            if (finalDist < this.holeRadius - 12) {
+              this.events.off('update', updateHandler);
+              this.handleSuccess();
+            } else {
+              // Stopped on board but not in hole - it's a miss (but stayed on board)
+              this.events.off('update', updateHandler);
+              this.handleMiss();
+            }
+          });
         }
+        return;
       }
 
-      // 3. Ground/Miss Detection
-      // If it goes past the board or stops moving
+      // 3. Bag went off screen
       if (this.bagContainer.y > GAME_HEIGHT + 50) {
          this.events.off('update', updateHandler);
          this.handleMiss();
          return;
       }
 
-      // Stop check
-      const speed = Math.sqrt(velocityX*velocityX + velocityY*velocityY);
-      if (speed < 0.1 && this.bagContainer.y > 200) {
+      // 4. Bag stopped moving but not on board
+      if (!onBoard && speed < 0.1 && this.bagContainer.y > 200) {
          this.events.off('update', updateHandler);
          this.handleMiss();
          return;
