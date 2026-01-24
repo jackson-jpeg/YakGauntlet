@@ -5,6 +5,7 @@ import { firebaseConfig } from '../config/firebaseConfig';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
 import { YAK_COLORS, YAK_FONTS, STATIONS } from '../config/theme';
 import { AudioSystem } from '../utils/AudioSystem';
+import { GameStateService } from '../services/GameStateService';
 import type { StationId } from '../types';
 
 /**
@@ -594,6 +595,9 @@ export class BootScene extends Phaser.Scene {
 
   private startGame(): void {
     this.cameras.main.flash(600, 255, 255, 255);
+
+    // Initialize fresh game state
+    GameStateService.initNewRun();
 
     // Cleanup before transition
     this.cleanup();

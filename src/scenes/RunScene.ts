@@ -8,6 +8,7 @@ import { getCharacterQuote } from '../data/characterQuotes';
 import { AudioSystem } from '../utils/AudioSystem';
 import { SceneEnhancer } from '../utils/SceneEnhancer';
 import { EnhancedVisuals } from '../utils/EnhancedVisuals';
+import { ProceduralTextureFactory, DynamicLightingManager } from '../utils/ProceduralTextureFactory';
 import type { CharacterId } from '../types';
 
 export class RunScene extends Phaser.Scene {
@@ -41,17 +42,26 @@ export class RunScene extends Phaser.Scene {
   // Trail
   private trailPoints: { x: number; y: number }[] = [];
 
+  // High-fidelity graphics
+  private textureFactory!: ProceduralTextureFactory;
+  private lightingManager!: DynamicLightingManager;
+
   constructor() {
     super({ key: 'RunScene' });
   }
 
   create(): void {
-    GameStateService.initNewRun();
-
     // Initialize audio
     AudioSystem.init();
 
+    // Initialize high-fidelity graphics systems
+    this.textureFactory = new ProceduralTextureFactory(this);
+    this.lightingManager = new DynamicLightingManager(this);
+
     this.createBackground();
+
+    // Enable dynamic lighting after background is created
+    this.lightingManager.enable();
 
     // Graphics layers
     this.trail = this.add.graphics().setDepth(5);
@@ -92,64 +102,12 @@ export class RunScene extends Phaser.Scene {
   }
 
   private createBackground(): void {
-    // 1. Hardwood Court Floor
-    const bg = this.add.graphics();
-    bg.fillGradientStyle(0xd2a679, 0xd2a679, 0x8b5a2b, 0x8b5a2b, 1); // Wood gradient
-    bg.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    // Create high-fidelity hardwood court with procedural textures
+    const courtKey = this.textureFactory.createHardwoodCourt(GAME_WIDTH, GAME_HEIGHT);
+    const court = this.add.image(0, 0, courtKey).setOrigin(0, 0).setDepth(0);
 
-    // 2. Wood Planks Pattern
-    const plankGraphics = this.add.graphics();
-    plankGraphics.lineStyle(1, 0x8b5a2b, 0.3);
-    const plankWidth = 40;
-    
-    // Vertical planks
-    for (let x = 0; x < GAME_WIDTH; x += plankWidth) {
-      plankGraphics.moveTo(x, 0);
-      plankGraphics.lineTo(x, GAME_HEIGHT);
-    }
-    // Random horizontal cuts for plank ends
-    for (let x = 0; x < GAME_WIDTH; x += plankWidth) {
-      for (let y = 0; y < GAME_HEIGHT; y += 150) {
-        if (Math.random() > 0.3) {
-          const yOffset = y + (Math.random() * 100);
-          plankGraphics.moveTo(x, yOffset);
-          plankGraphics.lineTo(x + plankWidth, yOffset);
-        }
-      }
-    }
-    plankGraphics.strokePath();
-
-    // 3. Court Lines (White)
-    const courtLines = this.add.graphics();
-    courtLines.lineStyle(4, 0xffffff, 0.9);
-
-    // Center Court Line (at bottom)
-    courtLines.beginPath();
-    courtLines.moveTo(0, GAME_HEIGHT - 50);
-    courtLines.lineTo(GAME_WIDTH, GAME_HEIGHT - 50);
-    courtLines.strokePath();
-
-    // Three Point Arc (Top)
-    courtLines.beginPath();
-    courtLines.arc(GAME_WIDTH / 2, 100, 250, 0, Math.PI, false); 
-    courtLines.strokePath();
-
-    // Key / Paint Area (Top Center)
-    const paint = this.add.graphics();
-    paint.fillStyle(YAK_COLORS.primary, 0.2); // Yak red paint
-    paint.fillRect(GAME_WIDTH / 2 - 80, 0, 160, 300);
-    
-    courtLines.strokeRect(GAME_WIDTH / 2 - 80, 0, 160, 300);
-
-    // Free Throw Circle (Top of Key)
-    courtLines.beginPath();
-    courtLines.arc(GAME_WIDTH / 2, 300, 80, 0, Math.PI, false);
-    courtLines.strokePath();
-
-    // 4. Studio Ambience (Vignette)
-    const vignette = this.add.graphics();
-    vignette.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.6, 0.6);
-    vignette.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    // Apply dynamic lighting to court
+    this.lightingManager.addToPipeline(court);
   }
 
   private createBoard(): void {
@@ -159,75 +117,68 @@ export class RunScene extends Phaser.Scene {
     const boardWidth = 140;
     const boardHeight = 220;
 
-    // Board shadow
-    this.add.rectangle(boardX + 8, boardY + 8, boardWidth, boardHeight, 0x000000, 0.3).setDepth(2);
+    // Board shadow (soft, realistic)
+    const shadow = this.add.ellipse(boardX + 8, boardY + 8, boardWidth, boardHeight, 0x000000, 0.4);
+    shadow.setDepth(2);
+    this.lightingManager.addToPipeline(shadow);
 
-    // Main board body
-    const board = this.add.rectangle(boardX, boardY, boardWidth, boardHeight, 0xdeb887).setDepth(3);
-    board.setStrokeStyle(3, 0x8b4513);
+    // Create high-fidelity wooden cornhole board
+    const boardKey = this.textureFactory.createCornholeBoard(boardWidth, boardHeight);
+    const board = this.add.image(boardX, boardY, boardKey).setDepth(3);
+    this.lightingManager.addToPipeline(board);
 
-    // Wood grain for board
-    const grain = this.add.graphics().setDepth(4);
-    grain.lineStyle(1, 0xd2a679, 0.6);
-    for (let i = -boardHeight/2 + 20; i < boardHeight/2; i += 15) {
-      grain.beginPath();
-      grain.moveTo(boardX - boardWidth/2 + 5, boardY + i);
-      grain.lineTo(boardX + boardWidth/2 - 5, boardY + i + (Math.random() - 0.5) * 4);
-      grain.strokePath();
-    }
-
-    // The hole (Cornhole target)
+    // The hole coordinates (already integrated in board texture, but we need coords for physics)
     this.holeX = boardX;
     this.holeY = boardY - 40;
-    this.holeRadius = 38; // Slightly smaller for challenge
+    this.holeRadius = 38;
 
-    // Hole depth layers
-    this.add.circle(this.holeX + 2, this.holeY + 2, this.holeRadius, 0x000000, 0.5).setDepth(5);
-    this.add.circle(this.holeX, this.holeY, this.holeRadius + 4, 0x8b4513).setDepth(6);
-    this.add.circle(this.holeX, this.holeY, this.holeRadius, 0x1a1a1a).setDepth(7);
-    this.add.circle(this.holeX, this.holeY, this.holeRadius - 6, 0x0a0a0a).setDepth(8);
+    // Board legs (visual depth) - realistic wooden legs
+    const legWidth = 12;
+    const legHeight = 50;
+    const legColor = 0x5c4033;
 
-    // Board legs (visual depth)
-    this.add.rectangle(boardX - 40, boardY + 120, 10, 40, 0x5c4033).setDepth(1);
-    this.add.rectangle(boardX + 40, boardY + 120, 10, 40, 0x5c4033).setDepth(1);
+    const leftLeg = this.add.rectangle(boardX - 45, boardY + 120, legWidth, legHeight, legColor);
+    leftLeg.setDepth(1);
+    this.lightingManager.addToPipeline(leftLeg);
+
+    const rightLeg = this.add.rectangle(boardX + 45, boardY + 120, legWidth, legHeight, legColor);
+    rightLeg.setDepth(1);
+    this.lightingManager.addToPipeline(rightLeg);
+
+    // Leg shadows
+    this.add.ellipse(boardX - 45, boardY + 145, legWidth + 4, 8, 0x000000, 0.3).setDepth(0);
+    this.add.ellipse(boardX + 45, boardY + 145, legWidth + 4, 8, 0x000000, 0.3).setDepth(0);
 
     // Yak Stool Icons on floor near board
     const leftStool = createStoolIcon(this, boardX - 120, boardY + 80, 1.0);
     const rightStool = createStoolIcon(this, boardX + 120, boardY + 80, 1.0);
     leftStool.setDepth(2).setAlpha(0.6);
     rightStool.setDepth(2).setAlpha(0.6);
+    this.lightingManager.addToPipeline(leftStool);
+    this.lightingManager.addToPipeline(rightStool);
   }
 
   private createBeanbag(): void {
     this.spawnX = GAME_WIDTH / 2;
     this.spawnY = GAME_HEIGHT - 120; // Lower on screen
 
-    // Shadow
-    this.bagShadow = this.add.ellipse(this.spawnX, GAME_HEIGHT - 95, 45, 18, 0x000000, 0.35);
+    // Realistic soft shadow for beanbag
+    this.bagShadow = this.add.ellipse(this.spawnX, GAME_HEIGHT - 95, 50, 20, 0x000000, 0.4);
     this.bagShadow.setDepth(10);
 
     // Container for bag
     this.bagContainer = this.add.container(this.spawnX, this.spawnY);
     this.bagContainer.setDepth(100);
 
-    // Bag body - Yak Red
-    const bagBody = this.add.rectangle(0, 0, 48, 48, YAK_COLORS.primary);
-    bagBody.setStrokeStyle(2, YAK_COLORS.primaryDark);
+    // Create high-fidelity beanbag with fabric texture and stitching
+    const bagRadius = 24;
+    const bagKey = this.textureFactory.createBeanbag(bagRadius, YAK_COLORS.primary);
+    const bagSprite = this.add.image(0, 0, bagKey);
 
-    // Fabric shading
-    const bagShading = this.add.graphics();
-    bagShading.fillStyle(0xff6b6b, 0.2);
-    bagShading.fillRect(-24, -24, 24, 48);
+    // Apply dynamic lighting to bag
+    this.lightingManager.addToPipeline(bagSprite);
 
-    // Stitching
-    const stitching = this.add.graphics();
-    stitching.lineStyle(2, YAK_COLORS.secondary, 0.8);
-    stitching.beginPath();
-    stitching.moveTo(-18, 0); stitching.lineTo(18, 0);
-    stitching.moveTo(0, -18); stitching.lineTo(0, 18);
-    stitching.strokePath();
-
-    this.bagContainer.add([bagShading, bagBody, stitching]);
+    this.bagContainer.add(bagSprite);
   }
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
@@ -333,8 +284,14 @@ export class RunScene extends Phaser.Scene {
     let velocityX = vx;
     let velocityY = vy;
     const gravity = 0.5; // Heavier gravity for "beanbag" feel
-    const friction = 0.98; // Air resistance
-    const floorFriction = 0.8; // Sliding friction
+    const airFriction = 0.98; // Air resistance while flying
+
+    // Board physics constants
+    const boardFriction = 0.92; // Stronger friction when sliding on board
+    const boardBounce = 0.15; // Very low bounce (beanbags don't bounce much)
+
+    let onBoard = false;
+    let stoppedOnBoard = false;
 
     this.trailPoints = [];
     this.trail.clear();
@@ -345,18 +302,61 @@ export class RunScene extends Phaser.Scene {
         return;
       }
 
+      // Apply gravity
       velocityY += gravity;
-      velocityX *= friction;
-      velocityY *= friction;
 
+      // Board collision detection and sliding physics
+      const boardTop = 320 - 110;
+      const boardBottom = 320 + 110;
+      const boardLeft = GAME_WIDTH/2 - 70;
+      const boardRight = GAME_WIDTH/2 + 70;
+
+      const isOverBoard = this.bagContainer.x > boardLeft &&
+                          this.bagContainer.x < boardRight &&
+                          this.bagContainer.y > boardTop &&
+                          this.bagContainer.y < boardBottom;
+
+      // Landing on board
+      if (isOverBoard && velocityY > 0 && !onBoard) {
+        // Initial impact - small bounce then start sliding
+        velocityY = -velocityY * boardBounce;
+        onBoard = true;
+        AudioSystem.playBeep(0.8); // Thud sound
+      }
+
+      // While on board - apply board friction
+      if (onBoard && isOverBoard) {
+        // Strong friction slows the bag down
+        velocityX *= boardFriction;
+        velocityY *= boardFriction;
+
+        // Clamp to board surface (prevent bouncing off)
+        if (this.bagContainer.y < boardTop + 10) {
+          this.bagContainer.y = boardTop + 10;
+          velocityY = Math.max(0, velocityY);
+        }
+        if (this.bagContainer.y > boardBottom - 10) {
+          this.bagContainer.y = boardBottom - 10;
+          velocityY = Math.min(0, velocityY);
+        }
+      } else if (!isOverBoard && onBoard) {
+        // Slid off the board
+        onBoard = false;
+      } else if (!onBoard) {
+        // In air - use air friction
+        velocityX *= airFriction;
+        velocityY *= airFriction;
+      }
+
+      // Update position
       this.bagContainer.x += velocityX;
       this.bagContainer.y += velocityY;
-      this.bagContainer.rotation += velocityX * 0.05; // Spin
+      this.bagContainer.rotation += velocityX * 0.05; // Spin based on horizontal velocity
 
       // Shadow logic
       this.bagShadow.x = this.bagContainer.x;
       // Shadow gets smaller as bag goes "up/back" (y decreases)
-      const depthScale = Math.max(0.2, (this.bagContainer.y - 200) / 600); 
+      const depthScale = Math.max(0.2, (this.bagContainer.y - 200) / 600);
       this.bagShadow.setScale(depthScale * 1.2, depthScale * 0.5);
       this.bagShadow.setAlpha(0.3 * depthScale);
 
@@ -381,41 +381,49 @@ export class RunScene extends Phaser.Scene {
         this.holeX, this.holeY
       );
 
-      // Smaller hitbox for hole
-      if (distToHole < this.holeRadius - 15) {
+      // Can slide into hole from any direction
+      if (distToHole < this.holeRadius - 12) {
         this.events.off('update', updateHandler);
         this.handleSuccess();
         return;
       }
 
-      // 2. Board Collision (Bounce/Slide)
-      const boardTop = 320 - 110;
-      const boardBottom = 320 + 110;
-      const boardLeft = GAME_WIDTH/2 - 70;
-      const boardRight = GAME_WIDTH/2 + 70;
+      // 2. Check if bag has stopped moving
+      const speed = Math.sqrt(velocityX*velocityX + velocityY*velocityY);
 
-      // If landing on board area
-      if (this.bagContainer.x > boardLeft && this.bagContainer.x < boardRight &&
-          this.bagContainer.y > boardTop && this.bagContainer.y < boardBottom) {
-        
-        // If falling down onto it
-        if (velocityY > 0) {
-           velocityY = -velocityY * 0.1; // Tiny bounce, mostly slide
-           velocityX *= 0.7; // Friction
+      // If on board and stopped moving
+      if (onBoard && isOverBoard && speed < 0.15) {
+        if (!stoppedOnBoard) {
+          stoppedOnBoard = true;
+          // Give it a moment to see if it's in the hole
+          this.time.delayedCall(200, () => {
+            // Check distance to hole one more time
+            const finalDist = Phaser.Math.Distance.Between(
+              this.bagContainer.x, this.bagContainer.y,
+              this.holeX, this.holeY
+            );
+            if (finalDist < this.holeRadius - 12) {
+              this.events.off('update', updateHandler);
+              this.handleSuccess();
+            } else {
+              // Stopped on board but not in hole - it's a miss (but stayed on board)
+              this.events.off('update', updateHandler);
+              this.handleMiss();
+            }
+          });
         }
+        return;
       }
 
-      // 3. Ground/Miss Detection
-      // If it goes past the board or stops moving
+      // 3. Bag went off screen
       if (this.bagContainer.y > GAME_HEIGHT + 50) {
          this.events.off('update', updateHandler);
          this.handleMiss();
          return;
       }
 
-      // Stop check
-      const speed = Math.sqrt(velocityX*velocityX + velocityY*velocityY);
-      if (speed < 0.1 && this.bagContainer.y > 200) {
+      // 4. Bag stopped moving but not on board
+      if (!onBoard && speed < 0.1 && this.bagContainer.y > 200) {
          this.events.off('update', updateHandler);
          this.handleMiss();
          return;
@@ -542,5 +550,13 @@ export class RunScene extends Phaser.Scene {
     this.input.removeAllListeners();
     this.tweens.killAll();
     this.time.removeAllEvents();
+
+    // Cleanup procedural textures and lighting
+    if (this.textureFactory) {
+      this.textureFactory.destroy();
+    }
+    if (this.lightingManager) {
+      this.lightingManager.destroy();
+    }
   }
 }
