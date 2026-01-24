@@ -23,6 +23,18 @@
 - **Timer Management**: Timer properly starts on first station input and stops when final station completes
 - **6-Station Gauntlet**: Cornhole → Goalie → Wiffle → Football → 3PT Right → 3PT Left → Results
 
+### High-Fidelity Graphics Engine (NEW)
+- **Procedural Texture Factory**: Zero-dependency runtime texture generation using Phaser Graphics API
+  - Hardwood court with realistic wood grain, knots, glossy finish, and court lines
+  - Fabric beanbags with cross-hatch texture, stitching details, and specular highlights
+  - Wooden cornhole board with grain patterns, scuff marks, and deep shadowy hole
+- **Dynamic Lighting System**: Phaser Light2D pipeline for depth and realism
+  - Studio overhead lighting simulating professional studio setup
+  - Warm ambient fill light for natural look
+  - Pointer-following spotlight that intensifies on click/touch
+  - All game objects respond to lighting for 3D-like depth in 2D space
+- **Performance**: All textures generated at runtime - zero external image files required
+
 ---
 
 ## Table of Contents
@@ -1165,6 +1177,75 @@ PerformanceTracker.init(scene);
 PerformanceTracker.getFPS();
 PerformanceTracker.logPerformance();
 ```
+
+---
+
+### Procedural Texture Factory (NEW)
+
+**File:** `src/utils/ProceduralTextureFactory.ts`
+
+High-fidelity runtime texture generation without external assets:
+
+```typescript
+const factory = new ProceduralTextureFactory(scene);
+
+// Create realistic hardwood basketball court
+const courtKey = factory.createHardwoodCourt(width, height);
+const court = scene.add.image(0, 0, courtKey);
+
+// Create fabric beanbag with stitching
+const bagKey = factory.createBeanbag(radius, color);
+const bag = scene.add.image(x, y, bagKey);
+
+// Create wooden cornhole board with deep hole
+const boardKey = factory.createCornholeBoard(width, height);
+const board = scene.add.image(x, y, boardKey);
+
+// Cleanup when done
+factory.destroy();
+```
+
+**Features:**
+- **Wood Grain**: Perlin-like noise generation for realistic grain patterns
+- **Glossy Highlights**: Simulates polished hardwood finish
+- **Fabric Texture**: Cross-hatch patterns for cloth materials
+- **Stitching Details**: Dashed lines and radial patterns
+- **Knots & Scuffs**: Random imperfections for realism
+- **Gradients**: Radial and linear for 3D depth
+- **Vignettes**: Edge darkening for studio atmosphere
+
+---
+
+### Dynamic Lighting Manager (NEW)
+
+**File:** `src/utils/ProceduralTextureFactory.ts`
+
+Phaser Light2D implementation for depth and realism:
+
+```typescript
+const lighting = new DynamicLightingManager(scene);
+
+// Enable studio lighting setup
+lighting.enable();
+
+// Add objects to lighting pipeline
+lighting.addToPipeline(gameObject);
+
+// Automatic pointer-following spotlight with smooth interpolation
+// Cleanup
+lighting.destroy();
+```
+
+**Lighting Setup:**
+- **Main Light**: Overhead studio light (400px radius, white, 1.5 intensity)
+- **Ambient Light**: Fill light (800px radius, warm 0xffd4a3, 0.6 intensity)
+- **Pointer Light**: Follows mouse/touch (200-250px radius, increases on click)
+- **Ambient Color**: Dim base lighting (0x404040)
+
+**Performance Notes:**
+- Lights update every frame for smooth tracking
+- Intensity varies based on pointer state (1.2 idle, 1.8 active)
+- Uses smooth interpolation (15% smoothing factor) for natural movement
 
 ---
 
