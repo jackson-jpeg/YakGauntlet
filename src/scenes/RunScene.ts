@@ -75,7 +75,7 @@ export class RunScene extends Phaser.Scene {
     this.ui = createSceneUI(this, 0, 'Misses');
 
     // Custom instruction text for this scene
-    this.instructionText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 80, 'DRAG TO AIM & THROW', {
+    this.instructionText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 80, 'PULL DOWN & RELEASE TO THROW', {
       fontSize: '22px',
       fontFamily: YAK_FONTS.title,
       color: YAK_COLORS.textGold,
@@ -229,17 +229,18 @@ export class RunScene extends Phaser.Scene {
       }
     }
 
-    // Aim Line
-    const powerPercent = Math.min((power / 45) * 100, 100);
+    // Aim Line - much more visible
+    const powerPercent = Math.min((power / 60) * 100, 100);
     let color = YAK_COLORS.success;
     if (powerPercent > 60) color = YAK_COLORS.warning;
     if (powerPercent > 90) color = YAK_COLORS.danger;
 
-    this.aimLine.lineStyle(3, color, 0.8);
+    // Thicker, brighter aim line
+    this.aimLine.lineStyle(6, color, 1);
     this.aimLine.beginPath();
     this.aimLine.moveTo(this.bagContainer.x, this.bagContainer.y);
-    const lineLen = Math.min(distance * 0.7, 100);
-    // Show inverted direction (aim line goes toward target)
+    const lineLen = Math.min(distance * 1.2, 150);
+    // Drag down = aim up (toward board)
     this.aimLine.lineTo(
       this.bagContainer.x + (dx / distance) * lineLen,
       this.bagContainer.y - (dy / distance) * lineLen
@@ -269,10 +270,12 @@ export class RunScene extends Phaser.Scene {
     this.instructionText.setVisible(false);
     GameStateService.startTimer();
 
-    const power = Math.min(distance / 7, 45);
-    const vx = (dx / distance) * power * 0.35;
-    // INVERTED: Drag down (positive dy) = throw up (negative vy)
-    const vy = -(dy / distance) * power * 1.1;
+    // Slingshot mechanics: Drag down (pull back) = throw up (toward board)
+    // Increased power for better feel
+    const power = Math.min(distance / 5, 60);
+    const vx = (dx / distance) * power * 0.4;
+    // Drag down (positive dy) = throw up (negative vy) - DOUBLED for better throw
+    const vy = -(dy / distance) * power * 2.2;
 
     this.launchBag(vx, vy);
   }
