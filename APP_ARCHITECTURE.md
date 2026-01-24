@@ -21,7 +21,7 @@
 ### Game Flow Improvements
 - **Proper State Reset**: Game state now cleanly resets between runs
 - **Timer Management**: Timer properly starts on first station input and stops when final station completes
-- **6-Station Gauntlet**: Cornhole → Goalie → Wiffle → Football → 3PT Right → 3PT Left → Results
+- **7-Station Gauntlet**: Cornhole → Goalie → Wiffle → Football → 3PT Right → 3PT Left → Quiz → Results
 
 ### High-Fidelity Graphics Engine (NEW)
 - **Procedural Texture Factory**: Zero-dependency runtime texture generation using Phaser Graphics API
@@ -136,13 +136,10 @@ Corner3RightScene (Station 5: 3-Point Right)
     ↓
 Corner3LeftScene (Station 6: 3-Point Left)
     ↓
+QuizScene (Station 7: Trivia)
+    ↓
 ResultScene (Leaderboard & Results)
 ```
-
-**QuizScene (Bonus/Optional):**
-- Not part of main gauntlet flow
-- Available as standalone feature
-- Sporcle-style trivia game
 
 ### 2. Singleton Service Pattern
 
