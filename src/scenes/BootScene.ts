@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { firebaseConfig } from '../config/firebaseConfig';
+import { firebaseConfig, isFirebaseConfigured } from '../config/firebaseConfig';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
 import { YAK_COLORS, YAK_FONTS, STATIONS } from '../config/theme';
 import { AudioSystem } from '../utils/AudioSystem';
@@ -703,6 +703,11 @@ export class BootScene extends Phaser.Scene {
   // =================================================================
 
   private initFirebase(): void {
+    if (!isFirebaseConfigured || !firebaseConfig) {
+      console.log('Firebase not configured, running in offline mode');
+      return;
+    }
+
     try {
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);

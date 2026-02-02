@@ -30,15 +30,21 @@ class LeaderboardServiceClass {
 
         const stored = localStorage.getItem(LEADERBOARD_KEY);
         if (stored) {
-          const parsed = JSON.parse(stored);
-          // Validate structure
-          if (Array.isArray(parsed)) {
-            this.leaderboard = parsed.filter(entry =>
-              entry &&
-              typeof entry.username === 'string' &&
-              typeof entry.time_ms === 'number' &&
-              typeof entry.wet === 'boolean'
-            );
+          try {
+            const parsed = JSON.parse(stored);
+            // Validate structure
+            if (Array.isArray(parsed)) {
+              this.leaderboard = parsed.filter(entry =>
+                entry &&
+                typeof entry.username === 'string' &&
+                typeof entry.time_ms === 'number' &&
+                typeof entry.wet === 'boolean'
+              );
+            }
+          } catch (parseError) {
+            console.warn('Failed to parse leaderboard data, resetting:', parseError);
+            this.leaderboard = [];
+            localStorage.removeItem(LEADERBOARD_KEY);
           }
         }
       },

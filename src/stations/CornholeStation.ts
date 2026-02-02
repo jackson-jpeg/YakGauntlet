@@ -188,7 +188,7 @@ export class CornholeStation implements Station {
   }
 
   checkSuccess(): boolean {
-    if (!this.beanbag || !this.isInHole) return false;
+    if (!this.beanbag?.body || !this.isInHole) return false;
     const body = this.beanbag.body as MatterJS.BodyType;
     const velocity = body.velocity;
     const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);

@@ -1,19 +1,19 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
-import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail } from '../config/theme';
+import { GAUNTLET_COLORS, YAK_FONTS } from '../config/theme';
+import { GAUNTLET_BEANBAG } from '../config/physicsConfig';
 import { GameStateService } from '../services/GameStateService';
-import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
 import { AudioSystem } from '../utils/AudioSystem';
 import { ProceduralTextureFactory, DynamicLightingManager } from '../utils/ProceduralTextureFactory';
 
 /**
- * CORNHOLE - Simple beanbag toss
+ * GAUNTLET CORNHOLE - Rapid-fire industrial style
  *
  * MECHANICS:
- * 1. Touch bag at bottom
- * 2. Swipe UP (longer = more power)
- * 3. Bag arcs toward board
- * 4. Hit board = success, in hole = mega success
+ * 1. Throw bags as fast as possible (no turn delays)
+ * 2. Bags slide on the board
+ * 3. Must get 1 bag in the hole to progress (gate)
+ * 4. Timer counts UP - speed matters
  */
 export class RunScene extends Phaser.Scene {
   // Bag
@@ -28,6 +28,9 @@ export class RunScene extends Phaser.Scene {
   private bagY = 0;
   private bagVX = 0;
   private bagVY = 0;
+  private isSliding = false;
+  private slideVX = 0;
+  private slideVY = 0;
 
   // Board
   private board!: Phaser.GameObjects.Image;
@@ -45,11 +48,18 @@ export class RunScene extends Phaser.Scene {
   private trajectory!: Phaser.GameObjects.Graphics;
   private powerBar!: Phaser.GameObjects.Graphics;
 
-  // UI
-  private ui!: SceneUI;
+  // Gauntlet UI
+  private timerText!: Phaser.GameObjects.Text;
+  private bagsText!: Phaser.GameObjects.Text;
   private instructionText!: Phaser.GameObjects.Text;
-  private missCount = 0;
-  private readonly MAX_MISSES = 3;
+  private elapsedMs = 0;
+  private timerStarted = false;
+
+  // Gauntlet state
+  private bagsInHole = 0;
+  private readonly requiredBagsInHole = 1;
+  private bagQueue = 10;
+  private readonly throwCooldownMs = 150;
 
   // Graphics
   private textureFactory!: ProceduralTextureFactory;
@@ -61,6 +71,14 @@ export class RunScene extends Phaser.Scene {
 
   create(): void {
     AudioSystem.init();
+
+    // Reset state
+    this.bagsInHole = 0;
+    this.bagQueue = 10;
+    this.elapsedMs = 0;
+    this.timerStarted = false;
+    this.isFlying = false;
+    this.isSliding = false;
 
     // Graphics
     this.textureFactory = new ProceduralTextureFactory(this);
@@ -74,30 +92,7 @@ export class RunScene extends Phaser.Scene {
 
     this.createBoard();
     this.createBag();
-
-    // UI
-    this.ui = createSceneUI(this, 0, 'Misses');
-    this.instructionText = this.add.text(
-      GAME_WIDTH / 2,
-      GAME_HEIGHT - 120,
-      '☝️ SWIPE UP TO TOSS ☝️',
-      {
-        fontSize: '32px',
-        fontFamily: YAK_FONTS.title,
-        color: YAK_COLORS.textGold,
-        stroke: '#000000',
-        strokeThickness: 6,
-      }
-    ).setOrigin(0.5).setDepth(200);
-
-    // Pulse
-    this.tweens.add({
-      targets: this.instructionText,
-      scale: 1.1,
-      duration: 600,
-      yoyo: true,
-      repeat: -1,
-    });
+    this.createGauntletUI();
 
     // Input
     this.input.on('pointerdown', this.onDown, this);
@@ -110,9 +105,13 @@ export class RunScene extends Phaser.Scene {
   }
 
   private createBackground(): void {
-    const courtKey = this.textureFactory.createHardwoodCourt(GAME_WIDTH, GAME_HEIGHT);
-    const court = this.add.image(0, 0, courtKey).setOrigin(0, 0).setDepth(0);
-    this.lightingManager.addToPipeline(court);
+    // Industrial concrete floor
+    const floorKey = this.textureFactory.createConcreteFloor(GAME_WIDTH, GAME_HEIGHT);
+    const floor = this.add.image(0, 0, floorKey).setOrigin(0, 0).setDepth(0);
+    this.lightingManager.addToPipeline(floor);
+
+    // Studio lights at top
+    this.textureFactory.createStudioLights(this, GAME_WIDTH);
   }
 
   private createBoard(): void {
@@ -121,10 +120,10 @@ export class RunScene extends Phaser.Scene {
     this.boardY = 220;
 
     // Shadow
-    const shadow = this.add.ellipse(this.boardX + 5, this.boardY + 5, 180, 260, 0x000000, 0.4).setDepth(2);
+    const shadow = this.add.ellipse(this.boardX + 5, this.boardY + 5, 180, 260, 0x000000, 0.5).setDepth(2);
     this.lightingManager.addToPipeline(shadow);
 
-    // Board texture
+    // Board texture (using worn wood color)
     const boardKey = this.textureFactory.createCornholeBoard(170, 250);
     this.board = this.add.image(this.boardX, this.boardY, boardKey).setDepth(3);
     this.lightingManager.addToPipeline(this.board);
@@ -133,16 +132,16 @@ export class RunScene extends Phaser.Scene {
     this.holeX = this.boardX;
     this.holeY = this.boardY - 45;
 
-    // Hole glow indicator
-    const holeGlow = this.add.circle(this.holeX, this.holeY, 40, YAK_COLORS.secondary, 0);
-    holeGlow.setStrokeStyle(5, YAK_COLORS.secondary, 0.7);
+    // Hole glow indicator (more subtle for industrial look)
+    const holeGlow = this.add.circle(this.holeX, this.holeY, 40, GAUNTLET_COLORS.timerRed, 0);
+    holeGlow.setStrokeStyle(3, GAUNTLET_COLORS.timerRed, 0.5);
     holeGlow.setDepth(4);
 
     this.tweens.add({
       targets: holeGlow,
-      alpha: 0.9,
-      scale: 1.1,
-      duration: 1000,
+      alpha: 0.7,
+      scale: 1.05,
+      duration: 800,
       yoyo: true,
       repeat: -1,
     });
@@ -164,16 +163,50 @@ export class RunScene extends Phaser.Scene {
     // Shadow
     this.shadow = this.add.ellipse(this.bagX, this.bagY + 5, 60, 24, 0x000000, 0.5).setDepth(10);
 
-    // Bag
-    const bagKey = this.textureFactory.createBeanbag(28, YAK_COLORS.primary);
+    // Bag (red for Gauntlet style)
+    const bagKey = this.textureFactory.createBeanbag(28, GAUNTLET_COLORS.bagRed);
     this.bag = this.add.image(this.bagX, this.bagY, bagKey).setDepth(100);
     this.lightingManager.addToPipeline(this.bag);
+  }
+
+  private createGauntletUI(): void {
+    // Large timer at TOP CENTER (counts UP)
+    this.timerText = this.add.text(GAME_WIDTH / 2, 70, '0.00', {
+      fontSize: '64px',
+      fontFamily: YAK_FONTS.title,
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 6,
+    }).setOrigin(0.5).setDepth(200);
+
+    // Bags counter on LEFT
+    this.bagsText = this.add.text(30, 70, `BAGS: ${this.bagQueue}`, {
+      fontSize: '28px',
+      fontFamily: YAK_FONTS.title,
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 4,
+    }).setOrigin(0, 0.5).setDepth(200);
+
+    // Instruction text
+    this.instructionText = this.add.text(
+      GAME_WIDTH / 2,
+      GAME_HEIGHT - 160,
+      'GET ONE IN THE HOLE!',
+      {
+        fontSize: '36px',
+        fontFamily: YAK_FONTS.title,
+        color: '#ff3333',
+        stroke: '#000000',
+        strokeThickness: 6,
+      }
+    ).setOrigin(0.5).setDepth(200);
   }
 
   // ==================== INPUT ====================
 
   private onDown(pointer: Phaser.Input.Pointer): void {
-    if (this.isFlying) return;
+    if (this.isFlying || this.isSliding) return;
 
     // Only touch bottom half of screen
     if (pointer.y > GAME_HEIGHT / 2) {
@@ -194,7 +227,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private onMove(pointer: Phaser.Input.Pointer): void {
-    if (!this.isTouching || this.isFlying) return;
+    if (!this.isTouching || this.isFlying || this.isSliding) return;
 
     // Calculate power from swipe distance
     const swipeDistance = this.touchStartY - pointer.y; // Positive = swiping up
@@ -204,12 +237,11 @@ export class RunScene extends Phaser.Scene {
     if (power > 5) {
       this.drawTrajectory(power);
       this.drawPowerBar(power);
-      this.instructionText.setText(`POWER: ${Math.floor(power)}%`);
     }
   }
 
   private onUp(pointer: Phaser.Input.Pointer): void {
-    if (!this.isTouching || this.isFlying) return;
+    if (!this.isTouching || this.isFlying || this.isSliding) return;
 
     this.isTouching = false;
     this.trajectory.clear();
@@ -226,7 +258,6 @@ export class RunScene extends Phaser.Scene {
 
     if (power < 10) {
       // Not enough power
-      this.instructionText.setText('☝️ SWIPE UP TO TOSS ☝️');
       this.tweens.add({
         targets: this.bag,
         scale: 1,
@@ -236,7 +267,10 @@ export class RunScene extends Phaser.Scene {
     }
 
     // Start timer on first throw
-    GameStateService.startTimer();
+    if (!this.timerStarted) {
+      this.timerStarted = true;
+      GameStateService.startTimer();
+    }
 
     // Launch!
     this.throwBag(power);
@@ -249,7 +283,6 @@ export class RunScene extends Phaser.Scene {
 
     // Calculate arc path
     const velocity = power * 0.9;
-    const angle = -75; // Upward angle
     const vx = 0;
     const vy = -velocity;
 
@@ -257,12 +290,11 @@ export class RunScene extends Phaser.Scene {
     let py = this.bagY;
     let pvx = vx;
     let pvy = vy;
-    const gravity = 0.65;
 
     const points: { x: number; y: number }[] = [];
 
     for (let i = 0; i < 150; i++) {
-      pvy += gravity;
+      pvy += GAUNTLET_BEANBAG.gravity;
       px += pvx;
       py += pvy;
 
@@ -270,10 +302,10 @@ export class RunScene extends Phaser.Scene {
       points.push({ x: px, y: py });
     }
 
-    // Draw dotted arc
-    let color = YAK_COLORS.success;
-    if (power > 60) color = YAK_COLORS.warning;
-    if (power > 85) color = YAK_COLORS.danger;
+    // Draw dotted arc (industrial gray/red colors)
+    let color = 0x888888;
+    if (power > 60) color = GAUNTLET_COLORS.timerOrange;
+    if (power > 85) color = GAUNTLET_COLORS.timerRed;
 
     this.trajectory.lineStyle(8, color, 0.7);
 
@@ -308,34 +340,31 @@ export class RunScene extends Phaser.Scene {
     this.powerBar.fillStyle(0x000000, 0.7);
     this.powerBar.fillRoundedRect(barX, barY, barWidth, barHeight, 8);
 
-    // Fill
-    let color = YAK_COLORS.success;
-    if (power > 60) color = YAK_COLORS.warning;
-    if (power > 85) color = YAK_COLORS.danger;
+    // Fill (industrial colors)
+    let color = 0x888888;
+    if (power > 60) color = GAUNTLET_COLORS.timerOrange;
+    if (power > 85) color = GAUNTLET_COLORS.timerRed;
 
     const fillHeight = (barHeight * power) / 100;
     this.powerBar.fillStyle(color, 1);
     this.powerBar.fillRoundedRect(barX, barY + barHeight - fillHeight, barWidth, fillHeight, 8);
 
     // Border
-    this.powerBar.lineStyle(3, YAK_COLORS.secondary, 1);
+    this.powerBar.lineStyle(3, 0x666666, 1);
     this.powerBar.strokeRoundedRect(barX, barY, barWidth, barHeight, 8);
-
-    // Label
-    const label = this.add.text(barX + barWidth / 2, barY - 20, 'POWER', {
-      fontSize: '14px',
-      fontFamily: YAK_FONTS.title,
-      color: '#ffffff',
-    }).setOrigin(0.5).setDepth(151);
-
-    this.time.delayedCall(100, () => label.destroy());
   }
 
   // ==================== THROW PHYSICS ====================
 
   private throwBag(power: number): void {
     this.isFlying = true;
-    this.instructionText.setVisible(false);
+    this.bagQueue--;
+    this.bagsText.setText(`BAGS: ${this.bagQueue}`);
+
+    // Warning color when bags are low
+    if (this.bagQueue <= 3) {
+      this.bagsText.setColor('#ff6600');
+    }
 
     // Set velocity
     const velocity = power * 0.9;
@@ -358,8 +387,7 @@ export class RunScene extends Phaser.Scene {
   private updateBagPhysics(): void {
     if (!this.isFlying) return;
 
-    const gravity = 0.65;
-    this.bagVY += gravity;
+    this.bagVY += GAUNTLET_BEANBAG.gravity;
 
     this.bagX += this.bagVX;
     this.bagY += this.bagVY;
@@ -380,7 +408,7 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
-    // Check miss
+    // Check miss (off screen)
     if (this.bagY > GAME_HEIGHT + 50 || this.bagY < -50) {
       this.onMiss();
     }
@@ -406,24 +434,173 @@ export class RunScene extends Phaser.Scene {
     this.events.off('update', this.updateBagPhysics);
     this.isFlying = false;
 
-    // Check if in hole
+    // Check if directly in hole
     const distToHole = Phaser.Math.Distance.Between(this.bagX, this.bagY, this.holeX, this.holeY);
 
     if (distToHole < 42) {
       this.onHoleIn();
     } else {
-      this.onBoardSuccess();
+      // Start sliding physics
+      this.startSliding();
+    }
+  }
+
+  private startSliding(): void {
+    this.isSliding = true;
+
+    // Initial slide velocity based on landing speed
+    this.slideVX = this.bagVX * 0.3;
+    this.slideVY = GAUNTLET_BEANBAG.boardAngleSlide * 10; // Slide down due to board angle
+
+    AudioSystem.playBeep(0.6);
+
+    this.events.on('update', this.updateSlidePhysics, this);
+  }
+
+  private updateSlidePhysics(): void {
+    if (!this.isSliding) return;
+
+    // Apply deceleration
+    this.slideVX *= GAUNTLET_BEANBAG.slideDeceleration;
+    this.slideVY *= GAUNTLET_BEANBAG.slideDeceleration;
+
+    // Board angle pulls bag down
+    this.slideVY += GAUNTLET_BEANBAG.boardAngleSlide;
+
+    // Hole pull effect
+    const distToHole = Phaser.Math.Distance.Between(this.bagX, this.bagY, this.holeX, this.holeY);
+    if (distToHole < GAUNTLET_BEANBAG.holePullRadius) {
+      const pullStrength = (1 - distToHole / GAUNTLET_BEANBAG.holePullRadius) * GAUNTLET_BEANBAG.holePullStrength;
+      const angleToHole = Math.atan2(this.holeY - this.bagY, this.holeX - this.bagX);
+      this.slideVX += Math.cos(angleToHole) * pullStrength * 10;
+      this.slideVY += Math.sin(angleToHole) * pullStrength * 10;
+    }
+
+    this.bagX += this.slideVX;
+    this.bagY += this.slideVY;
+    this.bag.setPosition(this.bagX, this.bagY);
+    this.bag.rotation += this.slideVX * 0.05;
+
+    // Check if fell in hole while sliding
+    if (distToHole < 30) {
+      this.events.off('update', this.updateSlidePhysics);
+      this.isSliding = false;
+      this.onHoleIn();
+      return;
+    }
+
+    // Check if slid off board
+    const boardLeft = this.boardX - 85;
+    const boardRight = this.boardX + 85;
+    const boardBottom = this.boardY + 125;
+
+    if (this.bagX < boardLeft || this.bagX > boardRight || this.bagY > boardBottom) {
+      this.events.off('update', this.updateSlidePhysics);
+      this.isSliding = false;
+      this.onSlidOff();
+      return;
+    }
+
+    // Check if stopped
+    const speed = Math.sqrt(this.slideVX * this.slideVX + this.slideVY * this.slideVY);
+    if (speed < 0.1) {
+      this.events.off('update', this.updateSlidePhysics);
+      this.isSliding = false;
+      this.onStoppedOnBoard();
     }
   }
 
   private onHoleIn(): void {
+    this.bagsInHole++;
     AudioSystem.playSuccess();
-    this.cameras.main.flash(300, 255, 215, 0);
+    this.cameras.main.flash(300, 255, 100, 100);
 
-    const text = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 50, '🎯 CORNHOLE! 🎯', {
-      fontSize: '68px',
+    // Animate bag falling into hole
+    this.tweens.add({
+      targets: this.bag,
+      scale: 0.3,
+      alpha: 0,
+      duration: 300,
+      ease: 'Power2',
+    });
+
+    if (this.bagsInHole >= this.requiredBagsInHole) {
+      // Victory!
+      this.handleVictory();
+    } else {
+      // Spawn next bag quickly
+      this.time.delayedCall(this.throwCooldownMs, () => {
+        this.spawnReadyBag();
+      });
+    }
+  }
+
+  private onSlidOff(): void {
+    // Bag slid off board - animate falling
+    this.tweens.add({
+      targets: this.bag,
+      y: GAME_HEIGHT + 100,
+      alpha: 0,
+      duration: 500,
+      ease: 'Power2',
+      onComplete: () => {
+        this.spawnReadyBag();
+      },
+    });
+  }
+
+  private onStoppedOnBoard(): void {
+    // Bag stopped on board but not in hole - just spawn next
+    this.tweens.add({
+      targets: this.bag,
+      alpha: 0.3,
+      duration: 200,
+      onComplete: () => {
+        this.spawnReadyBag();
+      },
+    });
+  }
+
+  private onMiss(): void {
+    this.events.off('update', this.updateBagPhysics);
+    this.isFlying = false;
+
+    AudioSystem.playBeep(0.4);
+
+    // Spawn next bag quickly (no fail state in Gauntlet mode)
+    this.time.delayedCall(this.throwCooldownMs, () => {
+      this.spawnReadyBag();
+    });
+  }
+
+  private spawnReadyBag(): void {
+    if (this.bagQueue <= 0) {
+      // Out of bags but didn't complete - give more bags
+      this.bagQueue = 5;
+      this.bagsText.setText(`BAGS: ${this.bagQueue}`);
+      this.bagsText.setColor('#ff3333');
+    }
+
+    this.bagX = this.bagStartX;
+    this.bagY = this.bagStartY;
+    this.bag.setPosition(this.bagX, this.bagY);
+    this.bag.setRotation(0);
+    this.bag.setScale(1);
+    this.bag.setAlpha(1);
+
+    this.shadow.setPosition(this.bagX, this.bagY + 5);
+    this.shadow.setScale(1);
+    this.shadow.setAlpha(0.5);
+  }
+
+  private handleVictory(): void {
+    // Stop timer
+    const finalTime = this.elapsedMs;
+
+    const text = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 50, 'CLEARED!', {
+      fontSize: '72px',
       fontFamily: YAK_FONTS.title,
-      color: YAK_COLORS.textGold,
+      color: '#00ff00',
       stroke: '#000000',
       strokeThickness: 8,
     }).setOrigin(0.5).setDepth(500).setScale(0);
@@ -435,96 +612,43 @@ export class RunScene extends Phaser.Scene {
       ease: 'Back.easeOut',
     });
 
-    this.time.delayedCall(1500, () => {
-      showSuccessEffect(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, getRandomSuccess(), () => {
-        this.scene.start('GoalieScene');
-      });
-    });
-  }
-
-  private onBoardSuccess(): void {
-    AudioSystem.playBeep(1.3);
-
-    const text = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2, '✓ ON THE BOARD!', {
-      fontSize: '46px',
+    const timeText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 30, `TIME: ${(finalTime / 1000).toFixed(2)}s`, {
+      fontSize: '36px',
       fontFamily: YAK_FONTS.title,
-      color: YAK_COLORS.textGreen,
+      color: '#ffffff',
       stroke: '#000000',
-      strokeThickness: 6,
-    }).setOrigin(0.5).setDepth(500).setScale(0);
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(500).setAlpha(0);
 
     this.tweens.add({
-      targets: text,
-      scale: 1,
+      targets: timeText,
+      alpha: 1,
+      delay: 300,
       duration: 300,
-      ease: 'Back.easeOut',
     });
 
-    this.time.delayedCall(1200, () => {
-      showSuccessEffect(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, getRandomSuccess(), () => {
-        this.scene.start('GoalieScene');
-      });
+    this.time.delayedCall(2000, () => {
+      this.scene.start('GoalieScene');
     });
   }
 
-  private onMiss(): void {
-    this.events.off('update', this.updateBagPhysics);
-    this.isFlying = false;
-    this.missCount++;
+  update(_time: number, delta: number): void {
+    // Update timer (counts UP)
+    if (this.timerStarted && this.bagsInHole < this.requiredBagsInHole) {
+      this.elapsedMs += delta;
+      const seconds = this.elapsedMs / 1000;
+      this.timerText.setText(seconds.toFixed(2));
 
-    GameStateService.recordMiss('cornhole');
-    this.ui.missText.setText(`Misses: ${this.missCount}`);
-
-    AudioSystem.playBeep(0.4);
-
-    const text = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'MISS!', {
-      fontSize: '52px',
-      fontFamily: YAK_FONTS.title,
-      color: YAK_COLORS.textRed,
-      stroke: '#000000',
-      strokeThickness: 6,
-    }).setOrigin(0.5).setDepth(500).setScale(0);
-
-    this.tweens.add({
-      targets: text,
-      scale: 1,
-      alpha: 0,
-      duration: 1000,
-      ease: 'Power2',
-      onComplete: () => text.destroy(),
-    });
-
-    if (this.missCount >= this.MAX_MISSES) {
-      this.time.delayedCall(1000, () => {
-        showFailEffect(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, getRandomFail(), () => {
-          this.scene.start('GoalieScene');
-        });
-      });
-    } else {
-      this.time.delayedCall(1000, () => {
-        this.resetBag();
-      });
-    }
-  }
-
-  private resetBag(): void {
-    this.bagX = this.bagStartX;
-    this.bagY = this.bagStartY;
-    this.bag.setPosition(this.bagX, this.bagY);
-    this.bag.setRotation(0);
-    this.bag.setScale(1);
-
-    this.shadow.setPosition(this.bagX, this.bagY + 5);
-    this.shadow.setScale(1);
-    this.shadow.setAlpha(0.5);
-
-    this.instructionText.setVisible(true);
-    this.instructionText.setText('☝️ SWIPE UP TO TOSS ☝️');
-  }
-
-  update(): void {
-    if (!this.isFlying) {
-      updateTimer(this.ui);
+      // Color escalation based on time
+      if (seconds > 30) {
+        this.timerText.setColor('#ff3333'); // Red
+      } else if (seconds > 20) {
+        this.timerText.setColor('#ff6600'); // Orange
+      } else if (seconds > 10) {
+        this.timerText.setColor('#ffcc00'); // Yellow
+      } else {
+        this.timerText.setColor('#ffffff'); // White
+      }
     }
   }
 

@@ -1,10 +1,66 @@
 # YAK GAUNTLET - Complete Application Architecture & Documentation
 
-**Version:** 6.1 (Major Overhaul)
-**Last Updated:** 2026-01-24
-**Total Codebase:** ~13,713 lines of TypeScript
+**Version:** 6.2 (Gauntlet Cornhole Refactor)
+**Last Updated:** 2026-02-02
+**Total Codebase:** ~14,000 lines of TypeScript
 
-## Recent Updates (v6.1)
+## Recent Updates (v6.2)
+
+### Gauntlet Cornhole Refactor
+Complete transformation of the cornhole station from turn-based to rapid-fire "Gauntlet" style:
+
+#### Gameplay Changes
+- **Rapid-Fire Mechanics**: No more 1000ms delays between throws - throw bags continuously
+- **Slide Physics**: Bags now slide on the board instead of sticking, can slide into hole
+- **Hole Pull Effect**: Bags near the hole edge get pulled toward the center
+- **Gate Win Condition**: Must get 1 bag in the hole to progress (no fail state)
+- **Unlimited Attempts**: Keep throwing until you succeed
+
+#### Visual Theme (Industrial Studio)
+- **Concrete Floor**: Dark industrial concrete background replaces hardwood court
+- **Studio Lighting Rig**: Metal truss with 5 overhead light fixtures
+- **Gauntlet Color Palette**: Dark grays, danger reds, industrial aesthetic
+- **Red Beanbags**: Classic cornhole red bags
+
+#### UI/HUD Overhaul
+- **Large Timer (Counting UP)**: 64px timer at top center, counts up from 0
+- **Timer Color Escalation**: White → Yellow (10s) → Orange (20s) → Red (30s)
+- **Bags Counter**: Left side counter with warning colors when low
+- **"GET ONE IN THE HOLE!"**: Persistent instruction text
+
+#### Crash Fixes
+- **CornholeStation.ts**: Fixed null body access with optional chaining
+- **LeaderboardService.ts**: Wrapped JSON.parse in try-catch with recovery
+- **firebaseConfig.ts**: Added `isFirebaseConfigured` export, returns null config when not configured
+
+#### New Physics Constants
+```typescript
+// physicsConfig.ts
+export const GAUNTLET_BEANBAG = {
+  slideDeceleration: 0.94,    // Bags slide, don't stick
+  boardAngleSlide: 0.12,      // Board tilt pulls bags down
+  holePullRadius: 50,         // Slight pull near hole edge
+  holePullStrength: 0.015,    // Pull strength
+  gravity: 0.65,              // Standard gravity for arc
+};
+```
+
+#### New Theme Colors
+```typescript
+// theme.ts
+export const GAUNTLET_COLORS = {
+  bgDark: 0x1a1a1a,           // Concrete dark
+  bgMedium: 0x2d2d2d,         // Industrial gray
+  timerRed: 0xff3333,         // Anxiety-inducing timer
+  timerOrange: 0xff6600,      // Warning orange
+  bagRed: 0xcc0000,           // Classic cornhole red
+  // ... more industrial colors
+};
+```
+
+---
+
+## Previous Updates (v6.1)
 
 ### Critical Bug Fixes
 - **Fixed State Management Loop Bug**: Removed duplicate `GameStateService.initNewRun()` call from RunScene that was causing state corruption. Now properly initialized only in BootScene when starting a new game.
@@ -875,25 +931,33 @@ Each character has unique difficulty modifiers:
 
 ---
 
-### 2. RunScene (Station 1: Cornhole)
+### 2. RunScene (Station 1: Cornhole - Gauntlet Style)
 
 **File:** `src/scenes/RunScene.ts`
 
-**Objective:** Land beanbag on cornhole board
+**Objective:** Get 1 beanbag in the hole (gate condition)
 
-**Mechanics:**
-- Drag beanbag backward
-- Aim line shows trajectory
-- Release to throw
-- Success: Bag lands on board or in hole
-- Max 3 misses before auto-advance
+**Mechanics (Gauntlet Style):**
+- Rapid-fire: Throw bags continuously with 150ms cooldown
+- Swipe up to throw, aim line shows trajectory
+- Bags slide on board due to angle physics
+- Bags near hole get pulled toward center
+- **No fail state**: Keep throwing until you get one in
+- Timer counts UP (speed matters!)
 
 **Physics:**
-- Low bounce (0.25)
-- High friction
-- Medium gravity
+- Slide deceleration: 0.94 (bags slide, don't stick)
+- Board angle slide: 0.12 (tilt pulls bags down)
+- Hole pull radius: 50px with 0.015 strength
+- Standard gravity: 0.65
 
-**Transitions To:** GoalieScene
+**Visual Theme:**
+- Industrial concrete floor background
+- Studio lighting rig with 5 overhead fixtures
+- Red beanbags (classic cornhole style)
+- Timer color escalation (white → yellow → orange → red)
+
+**Transitions To:** GoalieScene (after getting 1 bag in hole)
 
 ---
 

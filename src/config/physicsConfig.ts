@@ -63,3 +63,12 @@ export const COLLISION_CATEGORIES = {
   sensor: 0x0008,
   goalie: 0x0010,
 } as const;
+
+// Gauntlet-style beanbag sliding physics
+export const GAUNTLET_BEANBAG = {
+  slideDeceleration: 0.94,    // Bags slide, don't stick
+  boardAngleSlide: 0.12,      // Board tilt pulls bags down
+  holePullRadius: 50,         // Slight pull near hole edge
+  holePullStrength: 0.015,    // How strong the pull is
+  gravity: 0.65,              // Standard gravity for arc
+} as const;

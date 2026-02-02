@@ -2,6 +2,22 @@
 // Consistent colors, fonts, and styling across all scenes
 // Based on The Yak show's vibrant, energetic aesthetic
 
+// Gauntlet Industrial Theme Colors
+export const GAUNTLET_COLORS = {
+  bgDark: 0x1a1a1a,           // Concrete dark
+  bgMedium: 0x2d2d2d,         // Industrial gray
+  bgLight: 0x404040,          // Lighter gray
+  timerRed: 0xff3333,         // Anxiety-inducing timer red
+  timerOrange: 0xff6600,      // Warning orange
+  timerYellow: 0xffcc00,      // Caution yellow
+  timerWhite: 0xffffff,       // Normal timer
+  boardWood: 0x8b5a2b,        // Worn wood brown
+  bagRed: 0xcc0000,           // Classic cornhole red bag
+  bagBlue: 0x0044cc,          // Classic cornhole blue bag
+  metalGray: 0x808080,        // Metal truss/fixtures
+  lightCone: 0xffffee,        // Studio light color
+};
+
 export const YAK_COLORS = {
   // Primary Yak brand colors (from show branding)
   primary: 0xff5722,        // Yak Orange-Red - main brand color

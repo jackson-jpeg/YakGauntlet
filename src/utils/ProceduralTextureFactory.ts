@@ -239,6 +239,139 @@ export class ProceduralTextureFactory {
   }
 
   /**
+   * Creates an industrial concrete floor texture for Gauntlet style
+   */
+  createConcreteFloor(width: number, height: number, key: string = 'concrete_floor'): string {
+    if (this.textures.has(key)) {
+      return this.textures.get(key)!;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+
+    // Base concrete color (dark gray)
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(0, 0, width, height);
+
+    // Add noise/texture
+    for (let i = 0; i < 5000; i++) {
+      const x = Math.random() * width;
+      const y = Math.random() * height;
+      const size = Math.random() * 2 + 0.5;
+      const brightness = Math.random() * 30 + 25;
+      ctx.fillStyle = `rgb(${brightness}, ${brightness}, ${brightness})`;
+      ctx.fillRect(x, y, size, size);
+    }
+
+    // Add subtle variation patches
+    for (let i = 0; i < 20; i++) {
+      const patchX = Math.random() * width;
+      const patchY = Math.random() * height;
+      const patchRadius = Math.random() * 100 + 50;
+      const gradient = ctx.createRadialGradient(patchX, patchY, 0, patchX, patchY, patchRadius);
+      const brightness = Math.random() > 0.5 ? 50 : 35;
+      gradient.addColorStop(0, `rgba(${brightness}, ${brightness}, ${brightness}, 0.3)`);
+      gradient.addColorStop(1, 'rgba(42, 42, 42, 0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(patchX - patchRadius, patchY - patchRadius, patchRadius * 2, patchRadius * 2);
+    }
+
+    // Expansion joint lines (concrete seams)
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 3;
+
+    // Horizontal lines
+    const hSpacing = height / 4;
+    for (let y = hSpacing; y < height; y += hSpacing) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+
+    // Vertical lines
+    const vSpacing = width / 3;
+    for (let x = vSpacing; x < width; x += vSpacing) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+    }
+
+    // Add crack details
+    ctx.strokeStyle = '#1f1f1f';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 8; i++) {
+      const startX = Math.random() * width;
+      const startY = Math.random() * height;
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      let x = startX;
+      let y = startY;
+      for (let j = 0; j < 5; j++) {
+        x += (Math.random() - 0.5) * 40;
+        y += Math.random() * 30;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // Vignette for depth
+    this.drawVignette(ctx, width, height, 0.4);
+
+    this.scene.textures.addCanvas(key, canvas);
+    this.textures.set(key, key);
+    return key;
+  }
+
+  /**
+   * Creates studio light fixtures (returns container with lights)
+   */
+  createStudioLights(scene: Phaser.Scene, width: number): Phaser.GameObjects.Container {
+    const container = scene.add.container(0, 0);
+
+    // Metal truss bar at top
+    const trussY = 25;
+    const truss = scene.add.rectangle(width / 2, trussY, width - 40, 12, 0x505050);
+    truss.setStrokeStyle(2, 0x303030);
+    container.add(truss);
+
+    // Light fixtures
+    const lightCount = 5;
+    const spacing = (width - 80) / (lightCount - 1);
+
+    for (let i = 0; i < lightCount; i++) {
+      const lightX = 40 + i * spacing;
+
+      // Light housing (rectangular)
+      const housing = scene.add.rectangle(lightX, trussY + 20, 30, 25, 0x404040);
+      housing.setStrokeStyle(1, 0x303030);
+      container.add(housing);
+
+      // Light bulb area (yellow glow)
+      const bulb = scene.add.rectangle(lightX, trussY + 35, 24, 8, 0xffffcc);
+      container.add(bulb);
+
+      // Light cone (subtle overlay)
+      const cone = scene.add.graphics();
+      cone.fillStyle(0xffffee, 0.03);
+      cone.beginPath();
+      cone.moveTo(lightX - 15, trussY + 40);
+      cone.lineTo(lightX + 15, trussY + 40);
+      cone.lineTo(lightX + 80, 400);
+      cone.lineTo(lightX - 80, 400);
+      cone.closePath();
+      cone.fill();
+      container.add(cone);
+    }
+
+    container.setDepth(1000);
+    return container;
+  }
+
+  /**
    * Creates a circular hole texture (for the board hole overlay)
    */
   createHole(radius: number, key: string = 'hole'): string {

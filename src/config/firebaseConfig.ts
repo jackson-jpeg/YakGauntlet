@@ -13,20 +13,26 @@ const missingVars = requiredEnvVars.filter(
   (varName) => !import.meta.env[varName]
 );
 
-if (missingVars.length > 0) {
-  console.error(
-    'Missing required environment variables:',
+// Export flag indicating whether Firebase is properly configured
+export const isFirebaseConfigured = missingVars.length === 0;
+
+if (!isFirebaseConfigured) {
+  console.warn(
+    'Firebase not configured - missing environment variables:',
     missingVars.join(', ')
   );
-  console.error('Please check your .env file and ensure all variables are set.');
+  console.warn('Running in offline mode.');
 }
 
-export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
-};
+// Return null config if not configured to prevent downstream crashes
+export const firebaseConfig = isFirebaseConfigured
+  ? {
+      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+      appId: import.meta.env.VITE_FIREBASE_APP_ID,
+      measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+    }
+  : null;
