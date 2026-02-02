@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
-import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail, createStoolIcon } from '../config/theme';
+import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail, createStoolIcon, getPowerColor } from '../config/theme';
 import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
 import { getCharacterQuote } from '../data/characterQuotes';
@@ -406,9 +406,7 @@ export class FootballScene extends Phaser.Scene {
     }
 
     const powerPercent = Math.min((power / 40) * 100, 100);
-    let color = YAK_COLORS.success;
-    if (powerPercent > 50) color = YAK_COLORS.warning;
-    if (powerPercent > 80) color = YAK_COLORS.danger;
+    const color = getPowerColor(powerPercent);
 
     // Aim line
     this.aimLine.lineStyle(4, color, 0.9);

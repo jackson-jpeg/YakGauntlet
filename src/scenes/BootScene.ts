@@ -6,6 +6,8 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
 import { YAK_COLORS, YAK_FONTS, STATIONS } from '../config/theme';
 import { AudioSystem } from '../utils/AudioSystem';
 import { GameStateService } from '../services/GameStateService';
+import { ErrorHandler } from '../utils/ErrorHandler';
+import { announceToScreenReader } from '../utils/Accessibility';
 import type { StationId } from '../types';
 
 /**
@@ -33,6 +35,10 @@ export class BootScene extends Phaser.Scene {
 
   // --- UI REGIONS ---
   private tickerY = GAME_HEIGHT - 25; // used for click filtering
+
+  // --- KEYBOARD NAVIGATION ---
+  private focusRing: Phaser.GameObjects.Graphics | null = null;
+  private isFocused = false;
 
   constructor() {
     super({ key: 'BootScene' });
@@ -406,13 +412,57 @@ export class BootScene extends Phaser.Scene {
     });
 
     // Spacebar start (nice on desktop)
-    this.input.keyboard?.once('keydown-SPACE', () => {
+    this.input.keyboard?.on('keydown-SPACE', () => {
       if (this.isTransitioning) return;
       this.isTransitioning = true;
       AudioSystem.playSuccess();
       this.time.delayedCall(100, () => AudioSystem.playWhoosh());
       this.startGame();
     });
+
+    // Tab key focuses the button
+    this.input.keyboard?.on('keydown-TAB', (event: KeyboardEvent) => {
+      event.preventDefault();
+      this.focusEasyButton();
+    });
+
+    // Enter key activates focused button
+    this.input.keyboard?.on('keydown-ENTER', () => {
+      if (!this.isFocused || this.isTransitioning) return;
+      this.isTransitioning = true;
+      AudioSystem.playSuccess();
+      this.time.delayedCall(100, () => AudioSystem.playWhoosh());
+      this.startGame();
+    });
+  }
+
+  private focusEasyButton(): void {
+    if (this.isFocused) return;
+    this.isFocused = true;
+
+    // Create focus ring around the easy button
+    if (!this.focusRing) {
+      this.focusRing = this.add.graphics();
+      this.focusRing.setDepth(251);
+    }
+
+    // Draw animated focus ring
+    this.focusRing.clear();
+    this.focusRing.lineStyle(4, YAK_COLORS.secondary, 1);
+    this.focusRing.strokeCircle(this.easyButton.x, this.easyButton.y, 95);
+
+    // Pulse animation for visibility
+    this.tweens.add({
+      targets: this.focusRing,
+      alpha: { from: 1, to: 0.5 },
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Announce for screen readers
+    announceToScreenReader('Easy button focused. Press Enter or Space to start the game.');
   }
 
   private createQuickHowTo(): void {
@@ -422,7 +472,7 @@ export class BootScene extends Phaser.Scene {
     const box = this.add.graphics();
     box.fillStyle(0x000000, 0.65);
     box.fillRoundedRect(20, yPos - 35, GAME_WIDTH - 40, 70, 12);
-    box.lineStyle(3, YAK_COLORS.secondaryGold, 0.7);
+    box.lineStyle(3, YAK_COLORS.secondary, 0.7);
     box.strokeRoundedRect(20, yPos - 35, GAME_WIDTH - 40, 70, 12);
     box.setDepth(280);
 
@@ -610,6 +660,16 @@ export class BootScene extends Phaser.Scene {
   private cleanup(): void {
     // Remove input listeners
     this.input.removeAllListeners('pointerdown');
+    this.input.keyboard?.removeAllListeners('keydown-SPACE');
+    this.input.keyboard?.removeAllListeners('keydown-TAB');
+    this.input.keyboard?.removeAllListeners('keydown-ENTER');
+
+    // Destroy focus ring
+    if (this.focusRing) {
+      this.focusRing.destroy();
+      this.focusRing = null;
+    }
+    this.isFocused = false;
 
     // Destroy all physics bodies to prevent memory leaks
     this.balls.forEach(ball => {
@@ -648,7 +708,14 @@ export class BootScene extends Phaser.Scene {
       const db = getFirestore(app);
       this.registry.set('firebase', { app, db });
     } catch (e) {
-      // intentionally silent
+      // Log error but allow game to continue in offline mode
+      ErrorHandler.logError({
+        component: 'BootScene',
+        action: 'initFirebase',
+        error: e instanceof Error ? e : new Error(String(e)),
+        metadata: { offlineMode: true },
+      });
+      // Game continues without Firebase (offline mode)
     }
   }
 

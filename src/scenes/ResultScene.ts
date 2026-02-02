@@ -9,6 +9,16 @@ import type { LeaderboardEntry, RunState, StationId } from '../types';
 
 type ResultFlowStep = 'RESULTS' | 'INITIALS' | 'LEADERBOARD';
 
+/**
+ * Station definition from STATIONS array
+ */
+interface StationDef {
+  readonly id: string;
+  readonly name: string;
+  readonly color: number;
+  readonly emoji: string;
+}
+
 export class ResultScene extends Phaser.Scene {
   private initials: string[] = ['', '', ''];
   private currentInitialIndex = 0;
@@ -190,7 +200,8 @@ export class ResultScene extends Phaser.Scene {
 
   private createTimeDisplayInto(container: Phaser.GameObjects.Container, finalTimeMs: number, isWet: boolean): void {
     const timeSeconds = (finalTimeMs / 1000).toFixed(2);
-    const containerY = 185;
+    // Use proportional positioning for responsive layout
+    const containerY = GAME_HEIGHT * 0.23;
 
     const panel = this.add.graphics();
     panel.fillStyle(0x000000, 0.6);
@@ -271,8 +282,79 @@ export class ResultScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Creates a single station row in the breakdown display
+   */
+  private createStationRow(
+    container: Phaser.GameObjects.Container,
+    station: StationDef,
+    misses: number,
+    y: number,
+    index: number
+  ): void {
+    // Row background
+    const rowBg = this.add.graphics();
+    rowBg.fillStyle(0x000000, 0.4);
+    rowBg.fillRoundedRect(25, y - 18, GAME_WIDTH - 50, 40, 8);
+    rowBg.lineStyle(1, station.color, 0.3);
+    rowBg.strokeRoundedRect(25, y - 18, GAME_WIDTH - 50, 40, 8);
+
+    rowBg.setAlpha(0);
+    this.tweens.add({
+      targets: rowBg,
+      alpha: 1,
+      duration: 300,
+      delay: 500 + index * 80,
+      ease: 'Power2',
+    });
+
+    // Station color indicator
+    const colorCircle = this.add.circle(48, y, 14, station.color, 0.9);
+    colorCircle.setStrokeStyle(2, 0xffffff, 0.6);
+
+    // Station emoji
+    const emoji = this.add.text(48, y, station.emoji, { fontSize: '18px' }).setOrigin(0.5);
+
+    // Station name
+    const nameText = this.add.text(75, y, station.name, {
+      fontFamily: YAK_FONTS.title,
+      fontSize: '15px',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0, 0.5);
+
+    // Checkmark
+    const check = this.add.text(GAME_WIDTH - 140, y, '✓', {
+      fontFamily: YAK_FONTS.body,
+      fontSize: '24px',
+      color: YAK_COLORS.textGreen,
+    }).setOrigin(0.5).setScale(0);
+
+    this.tweens.add({
+      targets: check,
+      scale: 1,
+      duration: 400,
+      delay: 600 + index * 80,
+      ease: 'Back.easeOut',
+    });
+
+    // Miss count
+    const missColor = misses === 0 ? YAK_COLORS.textGreen : misses <= 2 ? YAK_COLORS.textGold : YAK_COLORS.textRed;
+    const missText = this.add.text(GAME_WIDTH - 55, y, `${misses} miss${misses !== 1 ? 'es' : ''}`, {
+      fontFamily: YAK_FONTS.body,
+      fontSize: '13px',
+      color: missColor,
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5);
+
+    container.add([rowBg, colorCircle, emoji, nameText, check, missText]);
+  }
+
   private createStationBreakdownInto(container: Phaser.GameObjects.Container, state: RunState): void {
-    const startY = 335;
+    // Use proportional positioning for responsive layout
+    const startY = GAME_HEIGHT * 0.42;
 
     const titleText = this.add.text(GAME_WIDTH / 2, startY, 'STATION BREAKDOWN', {
       fontFamily: YAK_FONTS.title,
@@ -301,58 +383,7 @@ export class ResultScene extends Phaser.Scene {
       const y = startY + 40 + index * 48;
       const misses = state.missCountByStation[stationId] || 0;
 
-      const rowBg = this.add.graphics();
-      rowBg.fillStyle(0x000000, 0.4);
-      rowBg.fillRoundedRect(25, y - 18, GAME_WIDTH - 50, 40, 8);
-      rowBg.lineStyle(1, station.color, 0.3);
-      rowBg.strokeRoundedRect(25, y - 18, GAME_WIDTH - 50, 40, 8);
-
-      rowBg.setAlpha(0);
-      this.tweens.add({
-        targets: rowBg,
-        alpha: 1,
-        duration: 300,
-        delay: 500 + index * 80,
-        ease: 'Power2',
-      });
-
-      const colorCircle = this.add.circle(48, y, 14, station.color, 0.9);
-      colorCircle.setStrokeStyle(2, 0xffffff, 0.6);
-
-      const emoji = this.add.text(48, y, station.emoji, { fontSize: '18px' }).setOrigin(0.5);
-
-      const nameText = this.add.text(75, y, station.name, {
-        fontFamily: YAK_FONTS.title,
-        fontSize: '15px',
-        color: '#ffffff',
-        stroke: '#000000',
-        strokeThickness: 2,
-      }).setOrigin(0, 0.5);
-
-      const check = this.add.text(GAME_WIDTH - 140, y, '✓', {
-        fontFamily: YAK_FONTS.body,
-        fontSize: '24px',
-        color: YAK_COLORS.textGreen,
-      }).setOrigin(0.5).setScale(0);
-
-      this.tweens.add({
-        targets: check,
-        scale: 1,
-        duration: 400,
-        delay: 600 + index * 80,
-        ease: 'Back.easeOut',
-      });
-
-      const missColor = misses === 0 ? YAK_COLORS.textGreen : misses <= 2 ? YAK_COLORS.textGold : YAK_COLORS.textRed;
-      const missText = this.add.text(GAME_WIDTH - 55, y, `${misses} miss${misses !== 1 ? 'es' : ''}`, {
-        fontFamily: YAK_FONTS.body,
-        fontSize: '13px',
-        color: missColor,
-        stroke: '#000000',
-        strokeThickness: 2,
-      }).setOrigin(0.5);
-
-      container.add([rowBg, colorCircle, emoji, nameText, check, missText]);
+      this.createStationRow(container, station, misses, y, index);
     });
 
     const totalMisses = (Object.values(state.missCountByStation) as number[]).reduce((a, b) => a + b, 0);
@@ -383,7 +414,8 @@ export class ResultScene extends Phaser.Scene {
   }
 
   private createNextButtonInto(container: Phaser.GameObjects.Container): void {
-    const btnY = 715;
+    // Use proportional positioning for responsive layout
+    const btnY = GAME_HEIGHT * 0.89;
 
     const outerGlow = this.add.graphics();
     outerGlow.fillStyle(YAK_COLORS.primary, 0.2);
@@ -442,7 +474,8 @@ export class ResultScene extends Phaser.Scene {
   // ---------- STEP 2: INITIALS ----------
 
   private buildInitialsStep(finalTimeMs: number, isWet: boolean): void {
-    const sectionY = 170;
+    // Use proportional positioning for responsive layout
+    const sectionY = GAME_HEIGHT * 0.21;
 
     const title = this.add.text(GAME_WIDTH / 2, 75, 'ENTER INITIALS', {
       fontFamily: YAK_FONTS.title,
@@ -664,6 +697,125 @@ export class ResultScene extends Phaser.Scene {
     this.leaderboardStepContainer.add(this.leaderboardContainer);
   }
 
+  /**
+   * Creates a single leaderboard entry row
+   */
+  private createLeaderboardEntry(
+    container: Phaser.GameObjects.Container,
+    entry: LeaderboardEntry,
+    index: number,
+    isPlayer: boolean,
+    startY: number
+  ): void {
+    const y = startY + 40 + index * 34;
+
+    // Alternating row background
+    const rowBg = this.add.graphics();
+    if (index % 2 === 0) {
+      rowBg.fillStyle(0x000000, 0.15);
+      rowBg.fillRoundedRect(30, y - 14, GAME_WIDTH - 60, 30, 5);
+    }
+    container.add(rowBg);
+
+    // Player highlight
+    if (isPlayer) {
+      const highlight = this.add.graphics();
+      highlight.fillStyle(YAK_COLORS.primary, 0.25);
+      highlight.fillRoundedRect(30, y - 14, GAME_WIDTH - 60, 30, 5);
+      highlight.lineStyle(2, YAK_COLORS.secondary, 0.9);
+      highlight.strokeRoundedRect(30, y - 14, GAME_WIDTH - 60, 30, 5);
+      container.add(highlight);
+    }
+
+    // Rank (with medal emoji for top 3)
+    let rankText = `${index + 1}`;
+    if (index === 0) rankText = '🥇';
+    else if (index === 1) rankText = '🥈';
+    else if (index === 2) rankText = '🥉';
+
+    const rank = this.add.text(55, y, rankText, {
+      fontFamily: YAK_FONTS.title,
+      fontSize: '16px',
+      color: '#cbd5e1',
+    }).setOrigin(0, 0.5);
+
+    // Name
+    const name = this.add.text(135, y, entry.username, {
+      fontFamily: YAK_FONTS.mono,
+      fontSize: '17px',
+      color: isPlayer ? YAK_COLORS.textGold : '#ffffff',
+      fontStyle: isPlayer ? 'bold' : 'normal',
+      stroke: '#000000',
+      strokeThickness: isPlayer ? 3 : 2,
+    }).setOrigin(0, 0.5);
+
+    // Time
+    const timeSeconds = (entry.time_ms / 1000).toFixed(2);
+    const time = this.add.text(270, y, `${timeSeconds}s`, {
+      fontFamily: YAK_FONTS.mono,
+      fontSize: '15px',
+      color: entry.wet ? YAK_COLORS.textRed : YAK_COLORS.textGreen,
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0, 0.5);
+
+    // Status
+    const status = this.add.text(390, y, entry.wet ? 'WET' : 'DRY', {
+      fontFamily: YAK_FONTS.title,
+      fontSize: '13px',
+      color: entry.wet ? YAK_COLORS.textRed : YAK_COLORS.textGreen,
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0, 0.5);
+
+    // Fade in animation
+    const allElements = [rowBg, rank, name, time, status];
+    allElements.forEach(el => {
+      el.setAlpha(0);
+      this.tweens.add({
+        targets: el,
+        alpha: 1,
+        duration: 250,
+        delay: 80 + index * 60,
+        ease: 'Power2',
+      });
+    });
+
+    container.add([rank, name, time, status]);
+
+    // "YOU" label for player's entry
+    if (isPlayer) {
+      const youLabel = this.add.text(GAME_WIDTH - 80, y, '← YOU', {
+        fontFamily: YAK_FONTS.title,
+        fontSize: '12px',
+        color: YAK_COLORS.textOrange,
+        stroke: '#000000',
+        strokeThickness: 2,
+      }).setOrigin(0, 0.5).setAlpha(0);
+
+      this.tweens.add({
+        targets: youLabel,
+        alpha: 1,
+        scale: 1.1,
+        duration: 350,
+        delay: 120 + index * 60,
+        ease: 'Back.easeOut',
+        onComplete: () => {
+          this.tweens.add({
+            targets: youLabel,
+            scale: 1,
+            duration: 300,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+          });
+        },
+      });
+
+      container.add(youLabel);
+    }
+  }
+
   private createLeaderboardDisplayInto(container: Phaser.GameObjects.Container, startY: number): void {
     const entries = LeaderboardService.getTopEntries(5);
 
@@ -716,106 +868,8 @@ export class ResultScene extends Phaser.Scene {
     });
 
     entries.forEach((entry, index) => {
-      const y = startY + 40 + index * 34;
       const isPlayer = this.playerRank === index + 1 && this.playerRank > 0;
-
-      const rowBg = this.add.graphics();
-      if (index % 2 === 0) {
-        rowBg.fillStyle(0x000000, 0.15);
-        rowBg.fillRoundedRect(30, y - 14, GAME_WIDTH - 60, 30, 5);
-      }
-      container.add(rowBg);
-
-      if (isPlayer) {
-        const highlight = this.add.graphics();
-        highlight.fillStyle(YAK_COLORS.primary, 0.25);
-        highlight.fillRoundedRect(30, y - 14, GAME_WIDTH - 60, 30, 5);
-        highlight.lineStyle(2, YAK_COLORS.secondary, 0.9);
-        highlight.strokeRoundedRect(30, y - 14, GAME_WIDTH - 60, 30, 5);
-        container.add(highlight);
-      }
-
-      let rankText = `${index + 1}`;
-      if (index === 0) rankText = '🥇';
-      else if (index === 1) rankText = '🥈';
-      else if (index === 2) rankText = '🥉';
-
-      const rank = this.add.text(55, y, rankText, {
-        fontFamily: YAK_FONTS.title,
-        fontSize: '16px',
-        color: '#cbd5e1',
-      }).setOrigin(0, 0.5);
-
-      const name = this.add.text(135, y, entry.username, {
-        fontFamily: YAK_FONTS.mono,
-        fontSize: '17px',
-        color: isPlayer ? YAK_COLORS.textGold : '#ffffff',
-        fontStyle: isPlayer ? 'bold' : 'normal',
-        stroke: '#000000',
-        strokeThickness: isPlayer ? 3 : 2,
-      }).setOrigin(0, 0.5);
-
-      const timeSeconds = (entry.time_ms / 1000).toFixed(2);
-      const time = this.add.text(270, y, `${timeSeconds}s`, {
-        fontFamily: YAK_FONTS.mono,
-        fontSize: '15px',
-        color: entry.wet ? YAK_COLORS.textRed : YAK_COLORS.textGreen,
-        stroke: '#000000',
-        strokeThickness: 2,
-      }).setOrigin(0, 0.5);
-
-      const status = this.add.text(390, y, entry.wet ? 'WET' : 'DRY', {
-        fontFamily: YAK_FONTS.title,
-        fontSize: '13px',
-        color: entry.wet ? YAK_COLORS.textRed : YAK_COLORS.textGreen,
-        stroke: '#000000',
-        strokeThickness: 2,
-      }).setOrigin(0, 0.5);
-
-      const allElements = [rowBg, rank, name, time, status];
-      allElements.forEach(el => {
-        el.setAlpha(0);
-        this.tweens.add({
-          targets: el,
-          alpha: 1,
-          duration: 250,
-          delay: 80 + index * 60,
-          ease: 'Power2',
-        });
-      });
-
-      container.add([rank, name, time, status]);
-
-      if (isPlayer) {
-        const youLabel = this.add.text(GAME_WIDTH - 80, y, '← YOU', {
-          fontFamily: YAK_FONTS.title,
-          fontSize: '12px',
-          color: YAK_COLORS.textOrange,
-          stroke: '#000000',
-          strokeThickness: 2,
-        }).setOrigin(0, 0.5).setAlpha(0);
-
-        this.tweens.add({
-          targets: youLabel,
-          alpha: 1,
-          scale: 1.1,
-          duration: 350,
-          delay: 120 + index * 60,
-          ease: 'Back.easeOut',
-          onComplete: () => {
-            this.tweens.add({
-              targets: youLabel,
-              scale: 1,
-              duration: 300,
-              yoyo: true,
-              repeat: -1,
-              ease: 'Sine.easeInOut',
-            });
-          },
-        });
-
-        container.add(youLabel);
-      }
+      this.createLeaderboardEntry(container, entry, index, isPlayer, startY);
     });
   }
 

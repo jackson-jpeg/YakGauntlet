@@ -1,7 +1,14 @@
 import Phaser from 'phaser';
-import { YAK_COLORS, YAK_FONTS } from '../config/theme';
+import { YAK_COLORS, YAK_FONTS, getPowerColor } from '../config/theme';
 import { AudioSystem } from './AudioSystem';
 import { EnhancedVisuals } from './EnhancedVisuals';
+
+/**
+ * Power meter container with update method
+ */
+export interface PowerMeterContainer extends Phaser.GameObjects.Container {
+  updatePower: (power: number) => void;
+}
 
 /**
  * Unified scene enhancement system for AAA polish
@@ -243,8 +250,8 @@ export class SceneEnhancer {
     x: number,
     y: number,
     width: number = 200
-  ): Phaser.GameObjects.Container {
-    const container = scene.add.container(x, y);
+  ): PowerMeterContainer {
+    const container = scene.add.container(x, y) as PowerMeterContainer;
     container.setDepth(150);
 
     // Background
@@ -269,13 +276,11 @@ export class SceneEnhancer {
     container.add([bg, powerBar, label]);
 
     // Method to update power
-    (container as any).updatePower = (power: number) => {
+    container.updatePower = (power: number) => {
       powerBar.clear();
 
       const barWidth = (width - 10) * power;
-      let color = YAK_COLORS.successGreen;
-      if (power > 0.66) color = YAK_COLORS.dangerRed;
-      else if (power > 0.33) color = YAK_COLORS.warningYellow;
+      const color = getPowerColor(power);
 
       powerBar.fillStyle(color, 0.9);
       powerBar.fillRoundedRect(-width / 2 + 5, -10, barWidth, 20, 5);

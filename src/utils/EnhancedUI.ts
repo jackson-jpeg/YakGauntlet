@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
-import { YAK_COLORS, YAK_FONTS, STATIONS } from '../config/theme';
+import { YAK_COLORS, YAK_FONTS, STATIONS, getPowerColor } from '../config/theme';
 import { GameStateService } from '../services/GameStateService';
 
 /**
@@ -409,9 +409,7 @@ export function createPowerMeter(
     fill.clear();
 
     // Color based on power level
-    let color = YAK_COLORS.success;
-    if (percent > 0.6) color = YAK_COLORS.warning;
-    if (percent > 0.85) color = YAK_COLORS.danger;
+    const color = getPowerColor(percent);
 
     fill.fillStyle(color, 1);
     fill.fillRoundedRect(-98, -10, 196 * percent, 20, 10);

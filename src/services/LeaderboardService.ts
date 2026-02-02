@@ -69,6 +69,46 @@ class LeaderboardServiceClass {
     );
   }
 
+  /**
+   * Save leaderboard with retry logic and exponential backoff
+   * Useful for Firebase saves that may hit quota limits
+   */
+  async saveLeaderboardWithRetry(retries: number = 3): Promise<boolean> {
+    let attempt = 0;
+    let delay = 1000; // Start with 1 second delay
+
+    while (attempt < retries) {
+      try {
+        this.saveLeaderboard();
+        return true;
+      } catch (error) {
+        attempt++;
+        ErrorHandler.logError({
+          component: 'LeaderboardService',
+          action: 'saveLeaderboardWithRetry',
+          error: error instanceof Error ? error : new Error(String(error)),
+          metadata: { attempt, maxRetries: retries, nextDelay: delay },
+        });
+
+        if (attempt < retries) {
+          // Wait with exponential backoff before retrying
+          await new Promise(resolve => setTimeout(resolve, delay));
+          delay *= 2; // Double the delay for next attempt
+        }
+      }
+    }
+
+    // All retries failed - fall back to memory storage
+    console.warn('All save retries failed, using memory storage');
+    this.useMemoryStorage = true;
+    try {
+      MemoryStorage.setItem(LEADERBOARD_KEY, JSON.stringify(this.leaderboard));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   addEntry(entry: LeaderboardEntry): number {
     this.leaderboard.push(entry);
 

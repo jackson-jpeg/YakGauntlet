@@ -1,7 +1,56 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH } from '../config/gameConfig';
-import { YAK_COLORS, YAK_FONTS, STATIONS, TEXT_STYLES } from '../config/theme';
+import { YAK_COLORS, YAK_FONTS, STATIONS } from '../config/theme';
 import { GameStateService } from '../services/GameStateService';
+
+/**
+ * Configuration for creating rounded rectangle panels
+ */
+export interface PanelConfig {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  radius?: number;
+  fillColor?: number;
+  fillAlpha?: number;
+  strokeColor?: number;
+  strokeWidth?: number;
+}
+
+/**
+ * Creates a rounded rectangle panel with optional stroke
+ */
+export function createPanel(
+  scene: Phaser.Scene,
+  config: PanelConfig
+): Phaser.GameObjects.Graphics {
+  const {
+    x,
+    y,
+    width,
+    height,
+    radius = 12,
+    fillColor = 0x000000,
+    fillAlpha = 0.7,
+    strokeColor,
+    strokeWidth = 2,
+  } = config;
+
+  const graphics = scene.add.graphics();
+
+  // Fill
+  graphics.fillStyle(fillColor, fillAlpha);
+  graphics.fillRoundedRect(x, y, width, height, radius);
+
+  // Stroke (optional)
+  if (strokeColor !== undefined) {
+    graphics.lineStyle(strokeWidth, strokeColor, 1);
+    graphics.strokeRoundedRect(x, y, width, height, radius);
+  }
+
+  return graphics;
+}
 
 export interface SceneUI {
   timerText: Phaser.GameObjects.Text;
@@ -132,7 +181,8 @@ export function updateTimer(timerText: Phaser.GameObjects.Text): void {
       // Pulse effect for critical time
       timerText.setScale(1 + Math.sin(Date.now() / 100) * 0.05);
     } else if (timeMs > 45000) {
-      timerText.setColor('#fbbf24');
+      // Darker amber for better contrast (WCAG 4.5:1)
+      timerText.setColor('#f59e0b');
       timerText.setScale(1);
     } else {
       timerText.setColor('#ffffff');

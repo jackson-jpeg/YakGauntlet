@@ -6,7 +6,7 @@ export interface ErrorContext {
   component: string;
   action: string;
   error: Error;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export class ErrorHandler {
@@ -37,7 +37,7 @@ export class ErrorHandler {
     action: string,
     fn: () => T | Promise<T>,
     fallback: T,
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>
   ): Promise<T> {
     try {
       return await fn();
@@ -60,7 +60,7 @@ export class ErrorHandler {
     action: string,
     fn: () => T,
     fallback: T,
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>
   ): T {
     try {
       return fn();
@@ -135,7 +135,7 @@ export class ErrorHandler {
   /**
    * Validate that required fields exist in an object
    */
-  static validateRequired<T extends Record<string, any>>(
+  static validateRequired<T extends Record<string, unknown>>(
     obj: T,
     requiredFields: (keyof T)[],
     componentName: string

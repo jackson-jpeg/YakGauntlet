@@ -1,5 +1,12 @@
 import Phaser from 'phaser';
 
+// Extend Window interface for Safari's webkitAudioContext
+declare global {
+  interface Window {
+    webkitAudioContext: typeof AudioContext;
+  }
+}
+
 /**
  * Procedural audio system using Web Audio API
  * Generates all sounds programmatically - no audio files needed!
@@ -16,7 +23,8 @@ export class AudioSystem {
    */
   static init(): void {
     if (!this.audioContext) {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      this.audioContext = new AudioContextClass();
     }
   }
 

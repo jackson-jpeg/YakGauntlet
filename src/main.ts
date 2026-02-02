@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
 import { gameConfig } from './config/gameConfig';
+import { initAriaLiveRegion } from './utils/Accessibility';
+
+// Initialize accessibility features
+initAriaLiveRegion();
 
 // Initialize Phaser game
 const game = new Phaser.Game(gameConfig);

@@ -152,6 +152,19 @@ export const TEXT_STYLES = {
   },
 };
 
+/**
+ * Get power meter color based on percentage (0-100 or 0-1)
+ * Standardized thresholds: >80% danger, >50% warning, else success
+ */
+export function getPowerColor(powerPercent: number): number {
+  // Normalize to 0-100 if given as decimal
+  const percent = powerPercent > 1 ? powerPercent : powerPercent * 100;
+
+  if (percent > 80) return YAK_COLORS.danger;
+  if (percent > 50) return YAK_COLORS.warning;
+  return YAK_COLORS.success;
+}
+
 // Success/fail messages for variety
 export const SUCCESS_MESSAGES = [
   'NICE!', 'PERFECT!', 'CRUSHED IT!', 'MONEY!', 'LETS GO!', 'BOOM!', 'CLEAN!'

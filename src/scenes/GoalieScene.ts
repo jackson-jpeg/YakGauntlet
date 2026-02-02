@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
-import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail, PHYSICS, createStoolIcon } from '../config/theme';
+import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail, PHYSICS, createStoolIcon, getPowerColor } from '../config/theme';
 import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
 import { createConfetti, flashScreen, shakeCamera } from '../utils/VisualEffects';
 import { createGoalieSprite } from '../utils/CharacterSprites';
 import { getCharacterQuote, getCharacterName } from '../data/characterQuotes';
-import { CHARACTER_MODIFIERS } from '../types';
+import { CHARACTER_MODIFIERS, type CharacterId } from '../types';
 import { AudioSystem } from '../utils/AudioSystem';
 
 export class GoalieScene extends Phaser.Scene {
@@ -19,7 +19,7 @@ export class GoalieScene extends Phaser.Scene {
   private goalieDirection = 1;
   private goalieSpeed = 2.5;
   private goalieBobOffset = 0;
-  private goalieCharacterId!: string;
+  private goalieCharacterId!: CharacterId;
   private goalieQuoteText!: Phaser.GameObjects.Text;
 
   // Goal dimensions
@@ -55,6 +55,10 @@ export class GoalieScene extends Phaser.Scene {
 
   // Corner targets
   private cornerTargets: Phaser.GameObjects.Arc[] = [];
+
+  // Ball velocity state (for physics helpers)
+  private ballVelocityX = 0;
+  private ballVelocityY = 0;
 
   constructor() {
     super({ key: 'GoalieScene' });
@@ -285,13 +289,13 @@ export class GoalieScene extends Phaser.Scene {
     // Use character sprite system
     this.goalie = createGoalieSprite(
       this,
-      this.goalieCharacterId as any,
+      this.goalieCharacterId,
       GAME_WIDTH / 2,
       370
     );
 
     // Apply character modifiers
-    const modifiers = CHARACTER_MODIFIERS[this.goalieCharacterId as any];
+    const modifiers = CHARACTER_MODIFIERS[this.goalieCharacterId];
     if (modifiers) {
       this.goalieSpeed = 2.5 * modifiers.goalieSpeedMultiplier;
       // Width multiplier applied in collision detection
@@ -310,7 +314,7 @@ export class GoalieScene extends Phaser.Scene {
     nameplate.setDepth(25);
 
     // Goalie name
-    const goalieName = getCharacterName(this.goalieCharacterId as any);
+    const goalieName = getCharacterName(this.goalieCharacterId);
     const nameText = this.add.text(GAME_WIDTH / 2, nameplateY, goalieName, {
       fontSize: '18px',
       fontFamily: YAK_FONTS.title,
@@ -428,9 +432,7 @@ export class GoalieScene extends Phaser.Scene {
     }
 
     const powerPercent = Math.min((power / 45) * 100, 100);
-    let color = YAK_COLORS.success;
-    if (powerPercent > 50) color = YAK_COLORS.warning;
-    if (powerPercent > 80) color = YAK_COLORS.danger;
+    const color = getPowerColor(powerPercent);
 
     // Aim line
     this.aimLine.lineStyle(5, color, 0.9);
@@ -483,12 +485,110 @@ export class GoalieScene extends Phaser.Scene {
     this.kickBall(vx, vy);
   }
 
+  /**
+   * Updates ball physics (velocity and position)
+   */
+  private updateBallPhysics(): void {
+    // Apply friction/drag
+    this.ballVelocityY *= 0.97;
+    this.ballVelocityX *= 0.99;
+
+    // Update position
+    this.ballContainer.x += this.ballVelocityX;
+    this.ballContainer.y += this.ballVelocityY;
+    this.ballContainer.rotation += this.ballVelocityX * 0.06;
+
+    // Perspective scale
+    const scale = Math.max(0.35, 1 - (this.spawnY - this.ballContainer.y) / 700);
+    this.ballContainer.setScale(scale);
+  }
+
+  /**
+   * Updates ball shadow position and appearance
+   */
+  private updateBallShadow(): void {
+    const scale = this.ballContainer.scale;
+    this.ballShadow.x = this.ballContainer.x;
+    this.ballShadow.y = Math.min(GAME_HEIGHT - 130, this.goalBottom + 20);
+    this.ballShadow.setScale(scale * 0.8, scale * 0.3);
+    this.ballShadow.setAlpha(0.4 * scale);
+  }
+
+  /**
+   * Updates ball trail rendering
+   */
+  private updateBallTrail(): void {
+    const scale = this.ballContainer.scale;
+
+    this.trailPoints.push({ x: this.ballContainer.x, y: this.ballContainer.y });
+    if (this.trailPoints.length > 15) this.trailPoints.shift();
+
+    this.trail.clear();
+    for (let i = 1; i < this.trailPoints.length; i++) {
+      const alpha = (i / this.trailPoints.length) * 0.5;
+      const size = (i / this.trailPoints.length) * 12 * scale;
+      this.trail.fillStyle(0xffffff, alpha);
+      this.trail.fillCircle(this.trailPoints[i].x, this.trailPoints[i].y, size);
+    }
+  }
+
+  /**
+   * Checks for ball collisions and returns collision type
+   * Returns: 'goal' | 'blocked' | 'post' | 'wide' | 'short' | null
+   */
+  private checkBallCollisions(): 'goal' | 'blocked' | 'post' | 'wide' | 'short' | null {
+    const ballX = this.ballContainer.x;
+    const ballY = this.ballContainer.y;
+
+    // Goal area check
+    if (ballY < this.goalBottom && ballY > this.goalTop) {
+      if (ballX > this.goalLeft + 10 && ballX < this.goalRight - 10) {
+        // Check goalie
+        const goalieWidth = 70;
+        const goalieLeft = this.goalie.x - goalieWidth / 2;
+        const goalieRight = this.goalie.x + goalieWidth / 2;
+
+        if (ballX > goalieLeft && ballX < goalieRight && ballY > 320) {
+          return 'blocked';
+        }
+
+        // GOAL!
+        if (ballY < this.goalTop + 50) {
+          return 'goal';
+        }
+      }
+    }
+
+    // Post hit
+    if (ballY < this.goalBottom + 20 && ballY > this.goalTop - 20) {
+      if (Math.abs(ballX - this.goalLeft) < 15 || Math.abs(ballX - this.goalRight) < 15) {
+        return 'post';
+      }
+      // Crossbar
+      if (ballY < this.goalTop + 10 && ballX > this.goalLeft && ballX < this.goalRight) {
+        return 'post';
+      }
+    }
+
+    // Miss - wide
+    if (ballY < this.goalTop - 80 || ballX < 10 || ballX > GAME_WIDTH - 10) {
+      return 'wide';
+    }
+
+    // Stopped - short
+    if (Math.abs(this.ballVelocityY) < 0.5 && ballY < this.spawnY - 100) {
+      return 'short';
+    }
+
+    return null;
+  }
+
   private kickBall(vx: number, vy: number): void {
     // Kick sound
     AudioSystem.playSwoosh();
 
-    let velocityX = vx;
-    let velocityY = vy;
+    this.ballVelocityX = vx;
+    this.ballVelocityY = vy;
 
     this.trailPoints = [];
     this.trail.clear();
@@ -501,91 +601,32 @@ export class GoalieScene extends Phaser.Scene {
         return;
       }
 
-      velocityY *= 0.97;
-      velocityX *= 0.99;
+      // Update physics
+      this.updateBallPhysics();
+      this.updateBallShadow();
+      this.updateBallTrail();
 
-      this.ballContainer.x += velocityX;
-      this.ballContainer.y += velocityY;
-      this.ballContainer.rotation += velocityX * 0.06;
-
-      // Perspective scale
-      const scale = Math.max(0.35, 1 - (this.spawnY - this.ballContainer.y) / 700);
-      this.ballContainer.setScale(scale);
-
-      // Shadow
-      this.ballShadow.x = this.ballContainer.x;
-      this.ballShadow.y = Math.min(GAME_HEIGHT - 130, this.goalBottom + 20);
-      this.ballShadow.setScale(scale * 0.8, scale * 0.3);
-      this.ballShadow.setAlpha(0.4 * scale);
-
-      // Trail
-      this.trailPoints.push({ x: this.ballContainer.x, y: this.ballContainer.y });
-      if (this.trailPoints.length > 15) this.trailPoints.shift();
-
-      this.trail.clear();
-      for (let i = 1; i < this.trailPoints.length; i++) {
-        const alpha = (i / this.trailPoints.length) * 0.5;
-        const size = (i / this.trailPoints.length) * 12 * scale;
-        this.trail.fillStyle(0xffffff, alpha);
-        this.trail.fillCircle(this.trailPoints[i].x, this.trailPoints[i].y, size);
-      }
-
-      // Goal area check
-      if (this.ballContainer.y < this.goalBottom && this.ballContainer.y > this.goalTop) {
-        if (this.ballContainer.x > this.goalLeft + 10 && this.ballContainer.x < this.goalRight - 10) {
-          // Check goalie
-          const goalieWidth = 70;
-          const goalieLeft = this.goalie.x - goalieWidth / 2;
-          const goalieRight = this.goalie.x + goalieWidth / 2;
-
-          if (this.ballContainer.x > goalieLeft && this.ballContainer.x < goalieRight &&
-              this.ballContainer.y > 320) {
-            this.events.off('update', updateHandler);
-            this.handleBlocked();
-            return;
-          }
-
-          // GOAL!
-          if (this.ballContainer.y < this.goalTop + 50) {
-            this.events.off('update', updateHandler);
+      // Check collisions
+      const collision = this.checkBallCollisions();
+      if (collision) {
+        this.events.off('update', updateHandler);
+        switch (collision) {
+          case 'goal':
             this.handleGoal();
-            return;
-          }
+            break;
+          case 'blocked':
+            this.handleBlocked();
+            break;
+          case 'post':
+            this.handlePostHit();
+            break;
+          case 'wide':
+            this.handleMiss('WIDE!');
+            break;
+          case 'short':
+            this.handleMiss('SHORT!');
+            break;
         }
-      }
-
-      // Post hit
-      if (this.ballContainer.y < this.goalBottom + 20 && this.ballContainer.y > this.goalTop - 20) {
-        if (Math.abs(this.ballContainer.x - this.goalLeft) < 15 ||
-            Math.abs(this.ballContainer.x - this.goalRight) < 15) {
-          this.events.off('update', updateHandler);
-          this.handlePostHit();
-          return;
-        }
-        // Crossbar
-        if (this.ballContainer.y < this.goalTop + 10 &&
-            this.ballContainer.x > this.goalLeft &&
-            this.ballContainer.x < this.goalRight) {
-          this.events.off('update', updateHandler);
-          this.handlePostHit();
-          return;
-        }
-      }
-
-      // Miss
-      if (this.ballContainer.y < this.goalTop - 80 ||
-          this.ballContainer.x < 10 ||
-          this.ballContainer.x > GAME_WIDTH - 10) {
-        this.events.off('update', updateHandler);
-        this.handleMiss('WIDE!');
-        return;
-      }
-
-      // Stopped
-      if (Math.abs(velocityY) < 0.5 && this.ballContainer.y < this.spawnY - 100) {
-        this.events.off('update', updateHandler);
-        this.handleMiss('SHORT!');
-        return;
       }
     };
 
@@ -648,7 +689,7 @@ export class GoalieScene extends Phaser.Scene {
     }
 
     // Show character quote (taunt on goal scored)
-    const quote = getCharacterQuote(this.goalieCharacterId as any, 'taunt');
+    const quote = getCharacterQuote(this.goalieCharacterId, 'taunt');
     this.showGoalieQuote(quote, YAK_COLORS.danger);
 
     showSuccessEffect(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, 'GOAL!', () => {
@@ -721,7 +762,7 @@ export class GoalieScene extends Phaser.Scene {
           tail.destroy();
           if (this.goalieQuoteText) {
             this.goalieQuoteText.destroy();
-            this.goalieQuoteText = undefined as any;
+            this.goalieQuoteText = undefined!;
           }
         },
       });
@@ -757,7 +798,7 @@ export class GoalieScene extends Phaser.Scene {
     });
 
     // Show character quote
-    const quote = getCharacterQuote(this.goalieCharacterId as any, 'save');
+    const quote = getCharacterQuote(this.goalieCharacterId, 'save');
     this.showGoalieQuote(quote, YAK_COLORS.secondary);
 
     showFailEffect(this, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 80, 'SAVED!');

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
-import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail, createStoolIcon } from '../config/theme';
+import { YAK_COLORS, YAK_FONTS, getRandomSuccess, getRandomFail, createStoolIcon, getPowerColor } from '../config/theme';
 import { GameStateService } from '../services/GameStateService';
 import { createSceneUI, updateTimer, showSuccessEffect, showFailEffect, type SceneUI } from '../utils/UIHelper';
 import { getCharacterQuote } from '../data/characterQuotes';
@@ -479,9 +479,7 @@ export class Corner3LeftScene extends Phaser.Scene {
     }
 
     const powerPercent = Math.min((power / 50) * 100, 100);
-    let color = 0x22c55e;
-    if (powerPercent > 60) color = 0xeab308;
-    if (powerPercent > 85) color = 0xef4444;
+    const color = getPowerColor(powerPercent);
 
     this.aimLine.lineStyle(5, color, 0.9);
     this.aimLine.beginPath();
@@ -504,7 +502,8 @@ export class Corner3LeftScene extends Phaser.Scene {
     );
 
     this.instructionText.setText(`POWER: ${Math.round(powerPercent)}%`);
-    this.instructionText.setColor(powerPercent > 85 ? '#ef4444' : powerPercent > 60 ? '#eab308' : '#22c55e');
+    const colorHex = `#${color.toString(16).padStart(6, '0')}`;
+    this.instructionText.setColor(colorHex);
   }
 
   private onPointerUp(pointer: Phaser.Input.Pointer): void {
