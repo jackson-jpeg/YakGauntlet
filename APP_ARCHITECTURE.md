@@ -1254,6 +1254,13 @@ const factory = new ProceduralTextureFactory(scene);
 const courtKey = factory.createHardwoodCourt(width, height);
 const court = scene.add.image(0, 0, courtKey);
 
+// Create industrial concrete floor (Gauntlet style)
+const floorKey = factory.createConcreteFloor(width, height);
+const floor = scene.add.image(0, 0, floorKey);
+
+// Create studio lighting rig with overhead fixtures
+const lights = factory.createStudioLights(scene, width);
+
 // Create fabric beanbag with stitching
 const bagKey = factory.createBeanbag(radius, color);
 const bag = scene.add.image(x, y, bagKey);
@@ -1274,6 +1281,8 @@ factory.destroy();
 - **Knots & Scuffs**: Random imperfections for realism
 - **Gradients**: Radial and linear for 3D depth
 - **Vignettes**: Edge darkening for studio atmosphere
+- **Concrete Floor**: Industrial texture with noise, expansion joints, and cracks (v6.2)
+- **Studio Lights**: Metal truss bar with 5 hanging fixtures and light cones (v6.2)
 
 ---
 
@@ -1699,6 +1708,6 @@ This documentation should serve as the single source of truth for understanding 
 
 ---
 
-**Last Updated:** 2026-01-24
+**Last Updated:** 2026-02-02
 **Maintained By:** Development Team
 **Contact:** See project repository for issues/PRs
