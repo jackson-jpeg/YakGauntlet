@@ -1,9 +1,9 @@
 // Physics material presets for different objects
 export const PHYSICS_MATERIALS = {
   beanbag: {
-    friction: 0.8,
-    frictionAir: 0.02,
-    restitution: 0.1, // Low bounce - thuds and slides
+    friction: 0.9,
+    frictionAir: 0.03,
+    restitution: 0.05, // Very low bounce - thuds and slides
     density: 0.002,
   },
   basketball: {

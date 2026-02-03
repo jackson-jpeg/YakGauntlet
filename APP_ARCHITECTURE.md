@@ -1,10 +1,73 @@
 # YAK GAUNTLET - Complete Application Architecture & Documentation
 
-**Version:** 6.3 (Viral-Worthy Graphics Overhaul)
+**Version:** 6.4 (Physics & Bug Fixes)
 **Last Updated:** 2026-02-02
 **Total Codebase:** ~18,000 lines of TypeScript
 
-## Recent Updates (v6.3)
+## Recent Updates (v6.4)
+
+### Cornhole Physics & Mechanics Overhaul
+
+Complete overhaul of cornhole throwing mechanics for more intuitive and realistic gameplay.
+
+#### Drag-to-Throw Vector System
+- **New Input System**: Replaced vertical-only swipe with drag-back vector mechanic
+- **Horizontal Aiming**: Pull left to throw right, pull down to throw up
+- **Trajectory Preview**: Shows horizontal component in aim line
+- **Power Calculation**: Based on drag distance with fast-swipe bonus
+
+```typescript
+// New throw mechanics in RunScene.ts
+private onUp(pointer): void {
+  const dx = this.dragStartX - pointer.x; // Pull left = throw right
+  const dy = this.dragStartY - pointer.y; // Pull down = throw up
+  this.bagVX = normalizedDX * velocity * 0.15; // Horizontal component
+  this.bagVY = -velocity;
+}
+```
+
+#### 3D Perspective Scaling
+- Bags shrink as they travel "away" from camera (1.0 → 0.6 scale)
+- Creates depth illusion in 2D space
+- Depth sorting ensures bag renders above board during flight
+
+#### Physics Tuning
+- **Reduced restitution**: 0.1 → 0.05 (less bounce, more thud)
+- **Increased friction**: 0.8 → 0.9 (heavier slide feel)
+- **Increased air friction**: 0.02 → 0.03
+- **Screen shake on landing**: `zoomPunch()` effect when bag hits board
+- **Horizontal momentum**: Carries into slide physics
+
+### Trivia Content Fix
+- Removed Nick Turani nicknames question from quiz pool
+- Quiz now contains 35+ appropriate trivia questions
+
+### Bug Fixes
+
+#### Double Initial Entry Bug (ResultScene)
+- **Root Cause**: Both Phaser keyboard and hidden input handlers fired on same keystroke
+- **Fix**: Platform-specific input handling
+  - Mobile: Uses hidden input only (for native keyboard)
+  - Desktop: Uses Phaser keyboard only
+- Prevents "JJ" appearing when typing "J"
+
+#### Navigation Loop Bug (ResultScene)
+- **Root Cause**: `reset()` method didn't call `GameStateService.resetGame()`
+- **Fix**: Added `GameStateService.resetGame()` to "Back to Studio" button callback
+- Ensures clean state when starting new run
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `src/scenes/RunScene.ts` | Drag-to-throw vector, 3D scaling, screen shake |
+| `src/config/physicsConfig.ts` | Reduced restitution, increased friction |
+| `src/data/quizQuestions.ts` | Removed Nick Turani question |
+| `src/scenes/ResultScene.ts` | Platform-specific input, GameStateService reset |
+
+---
+
+## Previous Updates (v6.3)
 
 ### Viral-Worthy Graphics Overhaul
 
@@ -1195,9 +1258,12 @@ Each character has unique difficulty modifiers:
 
 **Mechanics (Gauntlet Style):**
 - Rapid-fire: Throw bags continuously with 150ms cooldown
-- Swipe up to throw, aim line shows trajectory
+- **Drag-back to throw**: Pull left to throw right, pull down to throw up (v6.4)
+- Trajectory preview shows horizontal component
 - Bags slide on board due to angle physics
 - Bags near hole get pulled toward center
+- **3D perspective scaling**: Bags shrink as they travel "away" (v6.4)
+- **Screen shake on landing**: `zoomPunch()` effect for impact feel (v6.4)
 - **No fail state**: Keep throwing until you get one in
 - Timer counts UP (speed matters!)
 
@@ -1206,6 +1272,8 @@ Each character has unique difficulty modifiers:
 - Board angle slide: 0.12 (tilt pulls bags down)
 - Hole pull radius: 50px with 0.015 strength
 - Standard gravity: 0.65
+- Restitution: 0.05 (very low bounce) (v6.4)
+- Friction: 0.9, Air friction: 0.03 (v6.4)
 
 **Visual Theme:**
 - Industrial concrete floor background

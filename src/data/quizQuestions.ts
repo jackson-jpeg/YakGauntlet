@@ -17,11 +17,6 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
     correct: ["Slow Time", "Wheel Spin", "Bad Vibez", "Cheating"]
   },
   {
-    question: "Select 4 Nick Turani Nicknames",
-    options: ["Nicky Clicky", "Nicky Smokes", "Clicky", "Mr. Bear", "Big Man", "Tank", "Mintzy", "Cheah", "BWalk", "Cat", "Young Mantis", "Nicky Sticks"],
-    correct: ["Nicky Clicky", "Nicky Smokes", "Clicky", "Mr. Bear"]
-  },
-  {
     question: "Select 5 Recurring Yak Bits/Games",
     options: ["The Gauntlet", "Case Race", "Data Day", "Drafts", "Vibes", "Spelling Bee", "Hot Seat", "Blind Taste", "Trivia", "Jeopardy", "Wheel Game", "Challenge Day"],
     correct: ["The Gauntlet", "Case Race", "Data Day", "Drafts", "Vibes"]

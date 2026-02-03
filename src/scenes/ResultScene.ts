@@ -110,10 +110,16 @@ export class ResultScene extends Phaser.Scene {
     this.leaderboardStepContainer.setVisible(step === 'LEADERBOARD');
 
     // Keyboard listener only while entering initials
+    // Use platform-specific input to avoid double-entry bug
     this.input.keyboard?.off('keydown', this.handleKeyPress, this);
     if (step === 'INITIALS' && !this.hasSubmitted) {
-      this.input.keyboard?.on('keydown', this.handleKeyPress, this);
-      this.focusHiddenInput();
+      if (this.isMobile()) {
+        // Mobile: Use hidden input only for native keyboard
+        this.focusHiddenInput();
+      } else {
+        // Desktop: Use Phaser keyboard only, don't focus hidden input
+        this.input.keyboard?.on('keydown', this.handleKeyPress, this);
+      }
     } else {
       // avoid leaving mobile keyboard up
       this.hiddenInput?.blur?.();
@@ -932,6 +938,7 @@ export class ResultScene extends Phaser.Scene {
     const backBtn = this.createPrimaryButton(GAME_WIDTH / 2, GAME_HEIGHT - 90, 'BACK TO STUDIO', () => {
       this.cleanupHiddenInput();
       this.reset();
+      GameStateService.resetGame();
       this.scene.start('BootScene');
     });
 
@@ -1280,6 +1287,8 @@ export class ResultScene extends Phaser.Scene {
     this.hiddenInput.addEventListener('input', (e) => {
       if (this.hasSubmitted) return;
       if (this.flowStep !== 'INITIALS') return;
+      // Only process hidden input on mobile to avoid double-entry with Phaser keyboard
+      if (!this.isMobile()) return;
 
       const target = e.target as HTMLInputElement;
       const value = target.value.toUpperCase();

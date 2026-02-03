@@ -43,8 +43,9 @@ export class RunScene extends Phaser.Scene {
   private holeX = 0;
   private holeY = 0;
 
-  // Input
-  private touchStartY = 0;
+  // Input - drag-to-throw vector system
+  private dragStartX = 0;
+  private dragStartY = 0;
   private touchStartTime = 0;
   private isTouching = false;
 
@@ -222,10 +223,11 @@ export class RunScene extends Phaser.Scene {
   private onDown(pointer: Phaser.Input.Pointer): void {
     if (this.isFlying || this.isSliding) return;
 
-    // Only touch bottom half of screen
+    // Only touch bottom half of screen (near the bag)
     if (pointer.y > GAME_HEIGHT / 2) {
       this.isTouching = true;
-      this.touchStartY = pointer.y;
+      this.dragStartX = pointer.x;
+      this.dragStartY = pointer.y;
       this.touchStartTime = Date.now();
 
       // Visual feedback
@@ -243,13 +245,14 @@ export class RunScene extends Phaser.Scene {
   private onMove(pointer: Phaser.Input.Pointer): void {
     if (!this.isTouching || this.isFlying || this.isSliding) return;
 
-    // Calculate power from swipe distance
-    const swipeDistance = this.touchStartY - pointer.y; // Positive = swiping up
-    const power = Math.max(0, Math.min(swipeDistance / 3, 100)); // 0-100%
+    // Calculate drag vector (pull back = throw forward)
+    const dx = this.dragStartX - pointer.x; // Pull left = throw right
+    const dy = this.dragStartY - pointer.y; // Pull down = throw up
+    const power = Math.max(0, Math.min(Math.sqrt(dx * dx + dy * dy) / 3, 100)); // 0-100%
 
-    // Show trajectory
+    // Show trajectory with horizontal component
     if (power > 5) {
-      this.drawTrajectory(power);
+      this.drawTrajectory(power, dx, dy);
       this.drawPowerBar(power);
     }
   }
@@ -261,12 +264,14 @@ export class RunScene extends Phaser.Scene {
     this.trajectory.clear();
     this.powerBar.clear();
 
-    // Calculate power
-    const swipeDistance = this.touchStartY - pointer.y;
+    // Calculate drag vector
+    const dx = this.dragStartX - pointer.x; // Pull left = throw right
+    const dy = this.dragStartY - pointer.y; // Pull down = throw up
+    const dragDistance = Math.sqrt(dx * dx + dy * dy);
     const swipeTime = Date.now() - this.touchStartTime;
-    const swipeSpeed = Math.abs(swipeDistance) / Math.max(swipeTime, 1);
+    const swipeSpeed = dragDistance / Math.max(swipeTime, 1);
 
-    let power = Math.max(0, Math.min(swipeDistance / 3, 100));
+    let power = Math.max(0, Math.min(dragDistance / 3, 100));
     power += swipeSpeed * 30; // Bonus for fast swipes
     power = Math.min(power, 100);
 
@@ -286,19 +291,24 @@ export class RunScene extends Phaser.Scene {
       GameStateService.startTimer();
     }
 
-    // Launch!
-    this.throwBag(power);
+    // Launch with direction!
+    this.throwBag(power, dx, dy);
   }
 
   // ==================== TRAJECTORY PREVIEW ====================
 
-  private drawTrajectory(power: number): void {
+  private drawTrajectory(power: number, dx: number = 0, dy: number = 0): void {
     this.trajectory.clear();
 
-    // Calculate arc path
+    // Calculate arc path with horizontal component
     const velocity = power * 0.9;
-    const vx = 0;
-    const vy = -velocity;
+    const dragMagnitude = Math.sqrt(dx * dx + dy * dy) || 1;
+    const normalizedDX = dx / dragMagnitude;
+    const normalizedDY = dy / dragMagnitude;
+
+    // Apply velocity in drag direction (scaled down for horizontal)
+    const vx = normalizedDX * velocity * 0.15; // Horizontal component (subtle)
+    const vy = -velocity; // Always throw upward
 
     let px = this.bagX;
     let py = this.bagY;
@@ -370,7 +380,7 @@ export class RunScene extends Phaser.Scene {
 
   // ==================== THROW PHYSICS ====================
 
-  private throwBag(power: number): void {
+  private throwBag(power: number, dx: number = 0, dy: number = 0): void {
     this.isFlying = true;
     this.bagQueue--;
     this.bagsText.setText(`BAGS: ${this.bagQueue}`);
@@ -381,9 +391,12 @@ export class RunScene extends Phaser.Scene {
       popScale(this, this.bagsText, 1.3, 150);
     }
 
-    // Set velocity
+    // Set velocity with horizontal component from drag direction
     const velocity = power * 0.9;
-    this.bagVX = 0;
+    const dragMagnitude = Math.sqrt(dx * dx + dy * dy) || 1;
+    const normalizedDX = dx / dragMagnitude;
+
+    this.bagVX = normalizedDX * velocity * 0.15; // Subtle horizontal aim
     this.bagVY = -velocity;
 
     // Visual with wind-up effect
@@ -422,8 +435,13 @@ export class RunScene extends Phaser.Scene {
     this.bag.setPosition(this.bagX, this.bagY);
     this.bag.rotation += this.bagVY * 0.015;
 
-    // Apply squash/stretch based on velocity (juice!)
-    applyMotionJuice(this, this.bag, this.bagVX, this.bagVY, 0.8);
+    // 3D perspective scaling - bag shrinks as it travels "away" from camera
+    const distanceProgress = Math.max(0, Math.min(1, 1 - (this.bagY / this.bagStartY)));
+    const perspectiveScale = Phaser.Math.Linear(1.0, 0.6, distanceProgress);
+    this.bag.setScale(perspectiveScale);
+
+    // Ensure bag renders above board during flight
+    this.bag.setDepth(100);
 
     // Update trail
     if (this.bagTrail) {
@@ -444,7 +462,7 @@ export class RunScene extends Phaser.Scene {
     }
 
     // Check miss (off screen)
-    if (this.bagY > GAME_HEIGHT + 50 || this.bagY < -50) {
+    if (this.bagY > GAME_HEIGHT + 50 || this.bagY < -50 || this.bagX < -50 || this.bagX > GAME_WIDTH + 50) {
       this.onMiss();
     }
   }
@@ -475,6 +493,9 @@ export class RunScene extends Phaser.Scene {
       this.bagTrail = null;
     }
 
+    // Screen shake on board landing for heavy thud feel
+    zoomPunch(this, 1.02, 80);
+
     // Impact juice - squash the bag
     impactJuice(this, this.bag, 1);
 
@@ -499,8 +520,8 @@ export class RunScene extends Phaser.Scene {
   private startSliding(): void {
     this.isSliding = true;
 
-    // Initial slide velocity based on landing speed
-    this.slideVX = this.bagVX * 0.3;
+    // Initial slide velocity based on landing speed (include horizontal momentum)
+    this.slideVX = this.bagVX * 0.5; // Carry horizontal momentum into slide
     this.slideVY = GAUNTLET_BEANBAG.boardAngleSlide * 10; // Slide down due to board angle
 
     AudioSystem.playBeep(0.6);
