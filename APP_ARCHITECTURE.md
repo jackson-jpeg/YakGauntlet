@@ -1,10 +1,266 @@
 # YAK GAUNTLET - Complete Application Architecture & Documentation
 
-**Version:** 6.2 (Gauntlet Cornhole Refactor)
+**Version:** 6.3 (Viral-Worthy Graphics Overhaul)
 **Last Updated:** 2026-02-02
-**Total Codebase:** ~14,000 lines of TypeScript
+**Total Codebase:** ~18,000 lines of TypeScript
 
-## Recent Updates (v6.2)
+## Recent Updates (v6.3)
+
+### Viral-Worthy Graphics Overhaul
+
+Complete graphics engine overhaul making every interaction feel "juicy" and satisfying. New animation systems, particle effects, screen effects, and atmospheric elements designed to create viral-worthy polish.
+
+#### New Utility Files
+
+| File | Purpose | Lines |
+|------|---------|-------|
+| `src/utils/JuiceFactory.ts` | Core juice system for squash/stretch, anticipation, follow-through | ~500 |
+| `src/utils/ScreenEffects.ts` | Screen-wide effects: zoom punch, vignette, chromatic aberration | ~400 |
+| `src/utils/SceneTransitions.ts` | Scene transitions: wipes, station intros, reveals | ~400 |
+| `src/utils/AtmosphericBackground.ts` | Ambient effects: dust motes, haze, light rays, animated elements | ~350 |
+
+#### JuiceFactory System
+
+Core system making every interaction feel satisfying with animation principles:
+
+```typescript
+import { applyMotionJuice, windUp, impactJuice, buttonPress, popIn, popOut } from './utils/JuiceFactory';
+
+// Squash/stretch based on velocity
+applyMotionJuice(scene, gameObject, velocityX, velocityY);
+
+// Anticipation before actions
+windUp(scene, gameObject, direction, duration, onComplete);
+
+// Impact feedback on landing/collision
+impactJuice(scene, gameObject, intensity);
+
+// Satisfying button press with scale bounce
+buttonPress(scene, button, callback);
+
+// Scale animations for UI elements
+popIn(scene, gameObject, duration);
+popOut(scene, gameObject, duration, onComplete);
+
+// Additional effects
+objectShake(scene, gameObject, intensity, duration);
+wobble(scene, gameObject, intensity);
+breathe(scene, gameObject, scale, duration);
+typeText(scene, textObject, fullText, charDelay, onComplete);
+rainbowShimmer(scene, gameObject, duration);
+createJuicyTrail(scene, gameObject, color, glowIntensity);
+```
+
+#### ScreenEffects System
+
+Screen-wide visual effects for dramatic moments:
+
+```typescript
+import { zoomPunch, vignettePulse, colorFlash, slowMotion, letterbox } from './utils/ScreenEffects';
+
+// Quick zoom in/out for impacts
+zoomPunch(scene, intensity, duration);
+
+// Edge vignette pulse
+vignettePulse(scene, intensity, color, duration);
+
+// Full screen color flash
+colorFlash(scene, color, duration, pattern);  // 'solid' | 'radial' | 'edges'
+
+// Chromatic aberration (RGB split) - WebGL
+chromaticAberration(scene, intensity, duration);
+
+// Dramatic slow motion
+slowMotion(scene, timeScale, duration);
+
+// Cinematic letterbox
+letterbox(scene, show, duration);
+
+// Freeze frame with zoom
+freezeFrame(scene, duration, withZoom);
+
+// Combined success/fail effects
+successScreenEffect(scene, tier);  // 'normal' | 'perfect' | 'legendary'
+failScreenEffect(scene, type);     // 'miss' | 'blocked' | 'close'
+```
+
+#### Timer Pressure Visuals
+
+Visual escalation system that creates tension as time passes:
+
+| Time | Color | Effects |
+|------|-------|---------|
+| 0-60s | White | Normal display |
+| 60-70s | Yellow | Subtle pulse (scale 1.02) |
+| 70-73s | Orange | Faster pulse, background glow |
+| 73s+ | Red | Aggressive pulse, vignette, edge glow |
+
+```typescript
+import { initTimerPressureVisuals, cleanupTimerPressureVisuals } from './utils/UIHelper';
+
+// Initialize in scene create()
+initTimerPressureVisuals(scene, timerText);
+
+// Cleanup in scene shutdown()
+cleanupTimerPressureVisuals(scene);
+```
+
+#### Enhanced Particle System
+
+New particle types in `VisualEffects.ts`:
+
+```typescript
+import {
+  createStarBurst, createSpiralBurst, createFirework,
+  createMegaConfetti, createImpactSparks, createDustPoof,
+  createSpeedLines, createEnhancedTrail
+} from './utils/VisualEffects';
+
+// Star burst - points radiate outward
+createStarBurst(scene, x, y, pointCount, colors);
+
+// Spiral burst - particles spiral outward
+createSpiralBurst(scene, x, y, count, colors);
+
+// Multi-stage firework explosion
+createFirework(scene, x, y, layers);
+
+// Mega confetti with stars, ribbons, spin
+createMegaConfetti(scene, x, y, { count, includeStars, includeRibbons, gravity, spin });
+
+// Directional impact sparks
+createImpactSparks(scene, x, y, angle, intensity);
+
+// Dust poof for landings
+createDustPoof(scene, x, y, color);
+
+// Speed lines / motion blur
+createSpeedLines(scene, gameObject, direction);
+
+// Physics-aware trails with glow and sparkle
+createEnhancedTrail(scene, gameObject, { color, glow, sparkle, gradient });
+```
+
+#### Tiered Success/Fail Feedback
+
+Three-tier success system based on performance:
+
+**Normal Success:**
+- Screen flash (green), camera shake (light)
+- Confetti burst (40 particles)
+- Text slam with scale pop
+- Ripple waves (3 layers)
+
+**Perfect Success (no misses on station):**
+- All of Normal + slow-mo effect (0.5x for 300ms)
+- Star burst particles, rainbow text shimmer
+- Extra confetti layer, intensified crowd cheer
+
+**Legendary Success (record time):**
+- All of Perfect + full screen gold flash
+- "LEGENDARY" stamp animation
+- Firework burst, screen zoom punch
+- Maximum confetti
+
+Three-tier fail system:
+
+**Miss (complete whiff):** Red flash, camera shake, dust poof, text wobble
+**Blocked/Saved:** Impact sparks, "DENIED" text slam, quick zoom on blocker
+**Close (almost made it):** Yellow flash, "ALMOST!" with bounce
+
+#### TV Show Opening Sequence (BootScene)
+
+Professional TV show intro when landing on boot scene:
+
+1. **Cold Open (0-300ms):** Black screen, audio hit
+2. **Logo Reveal (300-1500ms):** "THE YAK" slams from top, "GAUNTLET" slides up, sparkle particles
+3. **Studio Reveal (1500-2500ms):** Background fades in, studio lights flicker on, wheel spins
+4. **Interactive State (2500ms+):** Easy button pulses, "LIVE" badge glows, crowd camera flashes
+
+```typescript
+// In BootScene.ts
+playTVShowOpening();           // Full intro sequence
+createLiveBadge();             // Animated "LIVE" badge
+startCrowdFlashes(interval);   // Random camera flash effects
+enhanceSpotlight();            // Larger, more dramatic spotlight
+createLogoSparkles(logo);      // Sparkle particles around logo
+```
+
+#### Enhanced UI Components
+
+New animated UI elements in `EnhancedUI.ts`:
+
+```typescript
+import { createAnimatedCounter, createEnhancedMissCounter, createEnhancedPowerMeter } from './utils/EnhancedUI';
+
+// Animated counter with tick-up, pop, flash, milestone particles
+const counter = createAnimatedCounter(scene, x, y, initialValue, {
+  tickSound: true,
+  popScale: 1.2,
+  flashColor: 0xffc107,
+  milestoneParticles: true  // Every 10
+});
+counter.setValue(newValue);
+
+// Miss counter with icons, shake, pulse
+const missCounter = createEnhancedMissCounter(scene, x, y, {
+  showIcons: true,
+  shakeOnAdd: true,
+  pulseRed: true
+});
+missCounter.addMiss();
+
+// Power meter with liquid fill, glow, particles
+const powerMeter = createEnhancedPowerMeter(scene, x, y, {
+  liquidFill: true,
+  glow: true,
+  particles: true,
+  shakeAtMax: true
+});
+powerMeter.setPower(0.75);
+```
+
+#### Atmospheric Background System
+
+Ambient visual effects for immersive environments:
+
+```typescript
+import { createDustMotes, createHaze, createLightRays, createAnimatedCrowd, createDynamicLights, createAtmosphere } from './utils/AtmosphericBackground';
+
+// Floating dust motes catching light
+createDustMotes(scene, density, color);
+
+// Subtle fog/haze layer
+createHaze(scene, opacity);
+
+// Light rays through dust
+createLightRays(scene, angle, count);
+
+// Animated crowd with camera flashes
+createAnimatedCrowd(scene, rows);
+
+// Stadium lights with flicker and lens flare
+createDynamicLights(scene);
+
+// Combined atmosphere setup
+createAtmosphere(scene, 'stadium' | 'studio' | 'outdoor');
+```
+
+#### Scene Juice Integration
+
+All scenes enhanced with juice effects:
+
+- **RunScene:** Bag trails, motion juice, impact particles, dust poof on landing
+- **GoalieScene:** Goalie breathing animation, dive stretch, save celebration
+- **WiffleScene:** Ball juice, hit feedback, speed lines
+- **FootballScene:** Throw juice with anticipation, catch celebration
+- **Corner3Scenes:** Shot juice, swish effects, ring burst on make
+- **QuizScene:** Button pop-in animations, answer feedback with particles
+- **ResultScene:** Dramatic reveal with letterbox, animated counters, victory celebration
+
+---
+
+## Previous Updates (v6.2)
 
 ### Gauntlet Cornhole Refactor
 Complete transformation of the cornhole station from turn-based to rapid-fire "Gauntlet" style:

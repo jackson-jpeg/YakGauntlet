@@ -8,6 +8,9 @@ import { AudioSystem } from '../utils/AudioSystem';
 import { GameStateService } from '../services/GameStateService';
 import { ErrorHandler } from '../utils/ErrorHandler';
 import { announceToScreenReader } from '../utils/Accessibility';
+import { popIn, typeText, breathe, buttonPress } from '../utils/JuiceFactory';
+import { zoomPunch } from '../utils/ScreenEffects';
+import { createStarBurst } from '../utils/VisualEffects';
 import type { StationId } from '../types';
 
 /**
@@ -18,6 +21,7 @@ export class BootScene extends Phaser.Scene {
   // --- STATE ---
   private isTransitioning = false;
   private timeElapsed = 0;
+  private introComplete = false;
 
   // --- VISUAL CONTAINERS ---
   private logoContainer!: Phaser.GameObjects.Container;
@@ -39,6 +43,12 @@ export class BootScene extends Phaser.Scene {
   // --- KEYBOARD NAVIGATION ---
   private focusRing: Phaser.GameObjects.Graphics | null = null;
   private isFocused = false;
+
+  // --- TV SHOW OPENING ---
+  private liveBadge: Phaser.GameObjects.Container | null = null;
+  private crowdFlashTimer: Phaser.Time.TimerEvent | null = null;
+  private logoSparkles: Phaser.GameObjects.Graphics | null = null;
+  private studioLights: Phaser.GameObjects.Container[] = [];
 
   constructor() {
     super({ key: 'BootScene' });
@@ -62,30 +72,362 @@ export class BootScene extends Phaser.Scene {
     // Lighting is WebGL-only; guard it so Canvas builds don't die
     this.lightsEnabled = (this.game.renderer.type === Phaser.WEBGL);
     if (this.lightsEnabled) {
-      this.lights.enable().setAmbientColor(0x777777);
+      this.lights.enable().setAmbientColor(0x555555); // Start darker for reveal
     }
 
-    // Environment
-    this.createStudioEnvironment();
-    this.createWetWheelBackground();
-    this.createScanlines();
+    // Play TV Show Opening Sequence
+    this.playTVShowOpening();
+  }
 
-    // Physics
-    this.setupPhysics();
+  /**
+   * TV SHOW OPENING SEQUENCE
+   * 1. Cold Open (0-300ms) - Black screen, audio hit
+   * 2. Logo Reveal (300-1500ms) - Slam animations, sparkles
+   * 3. Studio Reveal (1500-2500ms) - Lights flicker, wheel fades in
+   * 4. Interactive State (2500ms+) - Everything active
+   */
+  private playTVShowOpening(): void {
+    // === 1. COLD OPEN ===
+    // Start with black overlay
+    const blackout = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000);
+    blackout.setDepth(3000);
 
-    // Chaos
-    this.time.delayedCall(500, () => this.startBallPitRain());
-    this.time.delayedCall(1100, () => this.spawnCrewHeads());
+    // Audio hit sound (using existing beep)
+    this.time.delayedCall(100, () => {
+      AudioSystem.playBeep(0.8);
+    });
 
-    // UI
-    this.createDataDayTicker();
-    this.createGlitchLogo();
-    this.createEasyButton();
-    this.createStationPreview();
-    this.createQuickHowTo();
+    // === 2. LOGO REVEAL (300ms) ===
+    this.time.delayedCall(300, () => {
+      // Create logo but hidden
+      this.createGlitchLogo();
+      this.logoContainer.setAlpha(0);
 
-    // Interactions
-    this.setupInteractions();
+      // Get logo children
+      const yakText = this.logoContainer.getAt(0) as Phaser.GameObjects.Text;
+      const gauntletText = this.logoContainer.getAt(1) as Phaser.GameObjects.Text;
+      const tagline = this.logoContainer.getAt(2) as Phaser.GameObjects.Text;
+
+      // Position off-screen for slam
+      yakText.y = -200;
+      gauntletText.y = 200;
+      tagline.setAlpha(0);
+
+      this.logoContainer.setAlpha(1);
+
+      // "THE YAK" slams down from top
+      this.tweens.add({
+        targets: yakText,
+        y: 0,
+        duration: 400,
+        ease: 'Back.easeOut',
+        onComplete: () => {
+          // Screen shake on impact
+          this.cameras.main.shake(100, 0.02);
+          zoomPunch(this, 1.05, 100);
+          AudioSystem.playBeep(1.5);
+        }
+      });
+
+      // "GAUNTLET" slides up from bottom
+      this.time.delayedCall(200, () => {
+        this.tweens.add({
+          targets: gauntletText,
+          y: 70,
+          duration: 400,
+          ease: 'Back.easeOut'
+        });
+      });
+
+      // Tagline types out letter-by-letter
+      this.time.delayedCall(700, () => {
+        tagline.setAlpha(1);
+        const fullText = tagline.text;
+        typeText(this, tagline, fullText, { letterDelay: 40 });
+      });
+
+      // Create logo sparkles
+      this.time.delayedCall(600, () => {
+        this.createLogoSparkles();
+      });
+    });
+
+    // === 3. STUDIO REVEAL (1500ms) ===
+    this.time.delayedCall(1500, () => {
+      // Fade out blackout to reveal studio
+      this.tweens.add({
+        targets: blackout,
+        alpha: 0,
+        duration: 800,
+        ease: 'Power2',
+        onComplete: () => blackout.destroy()
+      });
+
+      // Create environment (hidden initially)
+      this.createStudioEnvironment();
+      this.createScanlines();
+      this.setupPhysics();
+
+      // Wet wheel fades in with spin
+      this.createWetWheelBackground();
+
+      // Flicker studio lights on
+      this.flickerStudioLightsOn();
+
+      // Increase ambient light
+      if (this.lightsEnabled) {
+        const ambientObj = { value: 0x555555 };
+        this.tweens.add({
+          targets: ambientObj,
+          value: 0x777777,
+          duration: 1000,
+          onUpdate: () => {
+            this.lights.setAmbientColor(ambientObj.value);
+          }
+        });
+      }
+    });
+
+    // === 4. INTERACTIVE STATE (2500ms) ===
+    this.time.delayedCall(2500, () => {
+      this.introComplete = true;
+
+      // Balls start falling
+      this.startBallPitRain();
+      this.time.delayedCall(600, () => this.spawnCrewHeads());
+
+      // UI elements appear
+      this.createDataDayTicker();
+      this.createEasyButton();
+      this.createStationPreview();
+      this.createQuickHowTo();
+
+      // Create LIVE badge
+      this.createLiveBadge();
+
+      // Start crowd flashes
+      this.startCrowdFlashes();
+
+      // Setup interactions
+      this.setupInteractions();
+
+      // Enhance spotlight
+      this.enhanceSpotlight();
+
+      // Play ambient crowd sound
+      AudioSystem.playWhoosh();
+    });
+  }
+
+  /**
+   * Flicker studio lights on one-by-one
+   */
+  private flickerStudioLightsOn(): void {
+    const lightPositions = [
+      { x: 80, y: 30 },
+      { x: GAME_WIDTH / 2 - 100, y: 20 },
+      { x: GAME_WIDTH / 2 + 100, y: 20 },
+      { x: GAME_WIDTH - 80, y: 30 },
+    ];
+
+    lightPositions.forEach((pos, i) => {
+      this.time.delayedCall(i * 150, () => {
+        // Create light fixture
+        const light = this.add.container(pos.x, pos.y);
+        light.setDepth(85);
+
+        // Fixture base
+        const base = this.add.rectangle(0, 0, 40, 20, 0x333333);
+        light.add(base);
+
+        // Light glow (starts off)
+        const glow = this.add.circle(0, 15, 30, 0xffffee, 0);
+        light.add(glow);
+
+        // Flicker effect
+        let flickerCount = 0;
+        const flickerTimer = this.time.addEvent({
+          delay: 50,
+          callback: () => {
+            flickerCount++;
+            glow.setAlpha(Math.random() * 0.5);
+            if (flickerCount > 6) {
+              flickerTimer.remove();
+              // Light fully on
+              this.tweens.add({
+                targets: glow,
+                alpha: 0.4,
+                duration: 200
+              });
+            }
+          },
+          loop: true
+        });
+
+        this.studioLights.push(light);
+
+        // WebGL light
+        if (this.lightsEnabled) {
+          const pointLight = this.lights.addLight(pos.x, pos.y + 20, 150).setIntensity(0);
+          this.tweens.add({
+            targets: pointLight,
+            intensity: 0.8,
+            delay: 300,
+            duration: 300
+          });
+        }
+      });
+    });
+  }
+
+  /**
+   * Create animated "LIVE" badge in corner
+   */
+  private createLiveBadge(): void {
+    this.liveBadge = this.add.container(GAME_WIDTH - 60, 50);
+    this.liveBadge.setDepth(300);
+    this.liveBadge.setAlpha(0);
+
+    // Badge background
+    const bg = this.add.graphics();
+    bg.fillStyle(0xff0000, 1);
+    bg.fillRoundedRect(-35, -15, 70, 30, 6);
+    this.liveBadge.add(bg);
+
+    // Glow effect
+    const glow = this.add.graphics();
+    glow.fillStyle(0xff0000, 0.3);
+    glow.fillRoundedRect(-40, -20, 80, 40, 8);
+    this.liveBadge.add(glow);
+
+    // Text
+    const text = this.add.text(0, 0, '● LIVE', {
+      fontSize: '14px',
+      fontFamily: YAK_FONTS.title,
+      color: '#ffffff'
+    }).setOrigin(0.5);
+    this.liveBadge.add(text);
+
+    // Pop in
+    popIn(this, this.liveBadge, { duration: 300 });
+
+    // Pulsing glow
+    this.tweens.add({
+      targets: glow,
+      alpha: { from: 0.3, to: 0.6 },
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    // Blinking dot effect
+    this.tweens.add({
+      targets: text,
+      alpha: { from: 1, to: 0.6 },
+      duration: 500,
+      yoyo: true,
+      repeat: -1
+    });
+  }
+
+  /**
+   * Start random camera flash effects from "crowd"
+   */
+  private startCrowdFlashes(): void {
+    this.crowdFlashTimer = this.time.addEvent({
+      delay: 3000,
+      callback: () => {
+        if (Math.random() < 0.7) {
+          this.createCrowdFlash();
+        }
+      },
+      loop: true
+    });
+  }
+
+  private createCrowdFlash(): void {
+    // Random position near edges (simulating crowd)
+    const side = Math.random() < 0.5 ? 'left' : 'right';
+    const x = side === 'left' ? Phaser.Math.Between(20, 100) : Phaser.Math.Between(GAME_WIDTH - 100, GAME_WIDTH - 20);
+    const y = Phaser.Math.Between(GAME_HEIGHT * 0.6, GAME_HEIGHT - 80);
+
+    // Flash effect
+    const flash = this.add.circle(x, y, 5, 0xffffff, 1);
+    flash.setDepth(150);
+
+    this.tweens.add({
+      targets: flash,
+      radius: 30,
+      alpha: 0,
+      duration: 150,
+      ease: 'Power2',
+      onComplete: () => flash.destroy()
+    });
+
+    // Subtle screen brightness
+    const overlay = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0xffffff, 0.03);
+    overlay.setDepth(149);
+    this.tweens.add({
+      targets: overlay,
+      alpha: 0,
+      duration: 100,
+      onComplete: () => overlay.destroy()
+    });
+  }
+
+  /**
+   * Enhance spotlight to follow cursor more dramatically
+   */
+  private enhanceSpotlight(): void {
+    if (this.spotlight && this.lightsEnabled) {
+      // Make spotlight larger and more intense
+      this.spotlight.setRadius(500);
+      this.spotlight.setIntensity(2.5);
+
+      // Faster follow
+      this.lightFollowSpeed = 0.15;
+    }
+  }
+
+  /**
+   * Create sparkle particles around logo
+   */
+  private createLogoSparkles(): void {
+    if (!this.logoContainer) return;
+
+    const sparkleTimer = this.time.addEvent({
+      delay: 200,
+      callback: () => {
+        if (!this.logoContainer || !this.logoContainer.active) {
+          sparkleTimer.remove();
+          return;
+        }
+
+        const offsetX = (Math.random() - 0.5) * 300;
+        const offsetY = (Math.random() - 0.5) * 150;
+        const x = this.logoContainer.x + offsetX;
+        const y = this.logoContainer.y + offsetY;
+
+        const sparkle = this.add.star(x, y, 4, 2, 5, 0xffffff, 0.8);
+        sparkle.setDepth(201);
+        sparkle.setScale(0);
+
+        this.tweens.add({
+          targets: sparkle,
+          scale: 1,
+          alpha: 0,
+          rotation: Math.PI,
+          duration: 400,
+          ease: 'Power2',
+          onComplete: () => sparkle.destroy()
+        });
+      },
+      loop: true
+    });
+
+    // Stop after 3 seconds
+    this.time.delayedCall(3000, () => sparkleTimer.remove());
   }
 
   update(_time: number, delta: number): void {
@@ -391,24 +733,43 @@ export class BootScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
 
-    // Click
+    // Breathing/pulse animation on button itself
+    breathe(this, btn, { duration: 1500, amplitude: 0.04 });
+
+    // Larger pulsing glow behind button
+    const buttonGlow = this.add.circle(0, 0, 90, YAK_COLORS.danger, 0.2);
+    buttonGlow.setDepth(-1);
+    this.easyButton.add(buttonGlow);
+    this.easyButton.sendToBack(buttonGlow);
+
+    this.tweens.add({
+      targets: buttonGlow,
+      scale: 1.2,
+      alpha: 0.1,
+      duration: 1000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    // Click with juicy button press
     hit.on('pointerdown', () => {
       if (this.isTransitioning) return;
       this.isTransitioning = true;
 
       // Play success sound sequence
       AudioSystem.playSuccess();
-      this.time.delayedCall(100, () => AudioSystem.playWhoosh());
 
-      this.tweens.add({
-        targets: [btn, text],
-        scaleY: 0.82,
-        y: 14,
-        duration: 60,
-        yoyo: true,
-        ease: 'Quad.easeOut',
-        onComplete: () => this.startGame(),
-      });
+      // Use juicy button press effect
+      buttonPress(this, this.easyButton, () => {
+        AudioSystem.playWhoosh();
+        // Create celebration particles
+        createStarBurst(this, GAME_WIDTH / 2, GAME_HEIGHT * 0.74, {
+          points: 8,
+          colors: [YAK_COLORS.primary, YAK_COLORS.secondary, 0xffffff]
+        });
+        this.startGame();
+      }, { intensity: 1.2 });
     });
 
     // Spacebar start (nice on desktop)
@@ -685,6 +1046,29 @@ export class BootScene extends Phaser.Scene {
       }
     });
     this.heads = [];
+
+    // Cleanup TV show opening elements
+    if (this.liveBadge) {
+      this.liveBadge.destroy();
+      this.liveBadge = null;
+    }
+
+    if (this.crowdFlashTimer) {
+      this.crowdFlashTimer.remove();
+      this.crowdFlashTimer = null;
+    }
+
+    if (this.logoSparkles) {
+      this.logoSparkles.destroy();
+      this.logoSparkles = null;
+    }
+
+    this.studioLights.forEach(light => {
+      if (light && light.active) {
+        light.destroy();
+      }
+    });
+    this.studioLights = [];
 
     // Remove all tweens
     this.tweens.killAll();

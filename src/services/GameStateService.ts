@@ -93,6 +93,8 @@ class GameStateServiceClass {
   }
 
   completeRun(): void {
+    // Prevent double-complete
+    if (this.runState && this.runState.endTimeMs !== null) return;
     this.stopTimer();
   }
 

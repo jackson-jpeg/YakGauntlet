@@ -5,9 +5,12 @@ import { GameStateService } from '../services/GameStateService';
 import { LeaderboardService } from '../services/LeaderboardService';
 import { AudioSystem } from '../utils/AudioSystem';
 import { EnhancedVisuals } from '../utils/EnhancedVisuals';
+import { slamIn, objectShake, rainbowShimmer } from '../utils/JuiceFactory';
+import { zoomPunch, colorFlash, slowMotion, vignettePulse, letterbox, screenWarp } from '../utils/ScreenEffects';
+import { createFirework, createMegaConfetti, createVictoryRays, createRingBurst } from '../utils/VisualEffects';
 import type { LeaderboardEntry, RunState, StationId } from '../types';
 
-type ResultFlowStep = 'RESULTS' | 'INITIALS' | 'LEADERBOARD';
+type ResultFlowStep = 'DRAMATIC_REVEAL' | 'RESULTS' | 'INITIALS' | 'LEADERBOARD';
 
 /**
  * Station definition from STATIONS array
@@ -34,11 +37,16 @@ export class ResultScene extends Phaser.Scene {
   private cursorBlink: Phaser.GameObjects.Text | null = null;
   private cursorBlinkTween: Phaser.Tweens.Tween | null = null;
 
-  // 3-screen flow
-  private flowStep: ResultFlowStep = 'RESULTS';
+  // 4-screen flow
+  private flowStep: ResultFlowStep = 'DRAMATIC_REVEAL';
+  private dramaticRevealContainer!: Phaser.GameObjects.Container;
   private resultsContainer!: Phaser.GameObjects.Container;
   private initialsContainer!: Phaser.GameObjects.Container;
   private leaderboardStepContainer!: Phaser.GameObjects.Container;
+
+  // Dramatic reveal state
+  private finalTimeMs = 0;
+  private isWet = false;
 
   // Leaderboard display container (created/destroyed per show)
   private leaderboardContainer: Phaser.GameObjects.Container | null = null;
@@ -63,39 +71,32 @@ export class ResultScene extends Phaser.Scene {
       return;
     }
 
-    const finalTimeMs = GameStateService.getFinalTimeMs();
-    const isWet = finalTimeMs > 75000;
-
-    // Play entrance sound
-    AudioSystem.playBeep(1.2);
-    this.time.delayedCall(150, () => AudioSystem.playBeep(1.5));
-
-    // Celebration if dry run
-    if (!isWet) {
-      this.time.delayedCall(300, () => {
-        EnhancedVisuals.celebrateVictory(this);
-        AudioSystem.playSuccess();
-        AudioSystem.playCrowdCheer();
-      });
-    }
+    this.finalTimeMs = GameStateService.getFinalTimeMs();
+    this.isWet = this.finalTimeMs > 75000;
 
     this.createBackground();
 
     // Build step containers
-    this.resultsContainer = this.add.container(0, 0);
+    this.dramaticRevealContainer = this.add.container(0, 0);
+    this.resultsContainer = this.add.container(0, 0).setVisible(false);
     this.initialsContainer = this.add.container(0, 0).setVisible(false);
     this.leaderboardStepContainer = this.add.container(0, 0).setVisible(false);
 
-    // STEP 1
-    this.buildResultsStep(state, finalTimeMs, isWet);
+    // STEP 0: Dramatic Reveal
+    this.buildDramaticRevealStep();
 
-    // STEP 2
-    this.buildInitialsStep(finalTimeMs, isWet);
+    // STEP 1: Results breakdown
+    this.buildResultsStep(state, this.finalTimeMs, this.isWet);
 
-    // STEP 3
+    // STEP 2: Initials entry
+    this.buildInitialsStep(this.finalTimeMs, this.isWet);
+
+    // STEP 3: Leaderboard
     this.buildLeaderboardStep();
 
-    this.setFlowStep('RESULTS');
+    // Start with dramatic reveal
+    this.setFlowStep('DRAMATIC_REVEAL');
+    this.playDramaticReveal();
   }
 
   // ---------- FLOW CONTROL ----------
@@ -103,6 +104,7 @@ export class ResultScene extends Phaser.Scene {
   private setFlowStep(step: ResultFlowStep): void {
     this.flowStep = step;
 
+    this.dramaticRevealContainer.setVisible(step === 'DRAMATIC_REVEAL');
     this.resultsContainer.setVisible(step === 'RESULTS');
     this.initialsContainer.setVisible(step === 'INITIALS');
     this.leaderboardStepContainer.setVisible(step === 'LEADERBOARD');
@@ -122,6 +124,258 @@ export class ResultScene extends Phaser.Scene {
       const showCursor = step === 'INITIALS' && this.currentInitialIndex < 3 && !this.hasSubmitted;
       this.cursorBlink.setVisible(showCursor);
     }
+  }
+
+  // ---------- STEP 0: DRAMATIC REVEAL ----------
+
+  private buildDramaticRevealStep(): void {
+    // Dark overlay
+    const overlay = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.95);
+    this.dramaticRevealContainer.add(overlay);
+  }
+
+  private async playDramaticReveal(): Promise<void> {
+    // Cinematic letterbox
+    letterbox(this, true, 400, 50);
+
+    // 1. Dramatic pause with slow pulse vignette
+    vignettePulse(this, 0.3, 0x000000, 600);
+
+    await this.delay(500);
+
+    // Play drumroll
+    AudioSystem.playDrumroll();
+
+    // 2. Show "YOUR TIME" label with slam animation
+    const label = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 100, 'YOUR TIME', {
+      fontFamily: YAK_FONTS.title,
+      fontSize: '32px',
+      color: '#888888',
+    }).setOrigin(0.5).setAlpha(0);
+    this.dramaticRevealContainer.add(label);
+
+    slamIn(this, label, 'top', { duration: 350, distance: 100 });
+
+    await this.delay(400);
+
+    // 3. Animate time counter from 0 to final time
+    const timeDisplay = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2, '0.00', {
+      fontFamily: YAK_FONTS.title,
+      fontSize: '96px',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setAlpha(0);
+    this.dramaticRevealContainer.add(timeDisplay);
+
+    this.tweens.add({
+      targets: timeDisplay,
+      alpha: 1,
+      duration: 200,
+    });
+
+    await this.delay(300);
+
+    // Animate counter
+    await this.animateTimeCounter(timeDisplay, this.finalTimeMs, 1800);
+
+    await this.delay(400);
+
+    // 4. THE VERDICT
+    await this.showVerdict(timeDisplay);
+
+    // 5. Transition to results
+    await this.delay(1800);
+    this.transitionToResults();
+  }
+
+  private animateTimeCounter(display: Phaser.GameObjects.Text, targetMs: number, duration: number): Promise<void> {
+    return new Promise((resolve) => {
+      const startTime = this.time.now;
+      let lastClickTime = 0;
+      let lastPulseTime = 0;
+
+      const updateCounter = () => {
+        const elapsed = this.time.now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+
+        // Ease out for dramatic effect
+        const easeProgress = 1 - Math.pow(1 - progress, 3);
+        const currentMs = targetMs * easeProgress;
+        const seconds = (currentMs / 1000).toFixed(2);
+
+        display.setText(seconds);
+
+        // Scale pulse as counter speeds up
+        const pulseAmount = Math.sin(elapsed * 0.02) * 0.03 * (1 - progress);
+        display.setScale(1 + pulseAmount);
+
+        // Color shift based on time value
+        if (currentMs > 70000) {
+          display.setColor('#ff3333');
+        } else if (currentMs > 60000) {
+          display.setColor('#ff8800');
+        } else if (currentMs > 50000) {
+          display.setColor('#ffcc00');
+        }
+
+        // Play click sounds during counting (throttled)
+        if (this.time.now - lastClickTime > 50 && progress < 0.95) {
+          AudioSystem.playTimeClick();
+          lastClickTime = this.time.now;
+        }
+
+        // Screen pulse every 500ms
+        if (this.time.now - lastPulseTime > 500 && progress < 0.9) {
+          zoomPunch(this, 1.01, 80);
+          lastPulseTime = this.time.now;
+        }
+
+        if (progress < 1) {
+          this.time.delayedCall(16, updateCounter);
+        } else {
+          // Final scale reset
+          display.setScale(1);
+          resolve();
+        }
+      };
+
+      updateCounter();
+    });
+  }
+
+  private async showVerdict(timeDisplay: Phaser.GameObjects.Text): Promise<void> {
+    const verdictText = this.isWet ? 'WET!' : 'DRY!';
+    const verdictColor = this.isWet ? '#ef4444' : '#22c55e';
+    const verdictColorHex = this.isWet ? 0xef4444 : 0x22c55e;
+
+    // Play appropriate sound
+    if (this.isWet) {
+      AudioSystem.playWetReveal();
+    } else {
+      AudioSystem.playDryReveal();
+    }
+
+    // DRAMATIC SCREEN EFFECTS
+    if (this.isWet) {
+      // Wet: Red screen effects, ominous
+      colorFlash(this, 0xff0000, 'radial', { intensity: 0.7, duration: 400 });
+      this.cameras.main.shake(400, 0.025);
+      vignettePulse(this, 0.8, 0xff0000, 600);
+    } else {
+      // Dry: Glorious celebration
+      slowMotion(this, 0.4, 400);
+      colorFlash(this, 0x00ff00, 'radial', { intensity: 0.6, duration: 400 });
+      zoomPunch(this, 1.1, 250);
+      screenWarp(this, 1.5, GAME_WIDTH / 2, GAME_HEIGHT / 2, 400);
+    }
+
+    // Color the time based on result
+    timeDisplay.setColor(verdictColor);
+
+    // Ring burst before verdict
+    createRingBurst(this, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 80, {
+      count: 5,
+      colors: [verdictColorHex, 0xffffff],
+      maxRadius: 200,
+      duration: 600
+    });
+
+    await this.delay(100);
+
+    // Big verdict text slam from top
+    const verdict = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 120, verdictText, {
+      fontFamily: YAK_FONTS.title,
+      fontSize: '140px',
+      color: verdictColor,
+      stroke: '#000000',
+      strokeThickness: 12,
+      shadow: {
+        offsetX: 0,
+        offsetY: 0,
+        color: verdictColor,
+        blur: 40,
+        stroke: true,
+        fill: true,
+      },
+    }).setOrigin(0.5).setAlpha(0);
+    this.dramaticRevealContainer.add(verdict);
+
+    // Epic slam in from top
+    slamIn(this, verdict, 'top', { duration: 350, distance: 400 });
+
+    // Screen shake on impact
+    this.time.delayedCall(300, () => {
+      this.cameras.main.shake(150, 0.03);
+      zoomPunch(this, 1.05, 100);
+    });
+
+    // CELEBRATION EFFECTS
+    if (!this.isWet) {
+      this.time.delayedCall(100, () => {
+        // Victory rays
+        createVictoryRays(this, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 120, {
+          count: 16,
+          color: 0xffd700,
+          length: 400
+        });
+
+        // Mega confetti
+        createMegaConfetti(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, {
+          count: 120,
+          includeStars: true,
+          includeRibbons: true,
+          gravity: true,
+          spin: true,
+          spread: 500
+        });
+
+        // Fireworks
+        this.time.delayedCall(200, () => createFirework(this, GAME_WIDTH * 0.3, GAME_HEIGHT * 0.3));
+        this.time.delayedCall(400, () => createFirework(this, GAME_WIDTH * 0.7, GAME_HEIGHT * 0.25));
+        this.time.delayedCall(600, () => createFirework(this, GAME_WIDTH * 0.5, GAME_HEIGHT * 0.2));
+
+        AudioSystem.playCrowdCheer();
+      });
+
+      // Rainbow shimmer on verdict text
+      rainbowShimmer(this, verdict, 2000);
+    } else {
+      // Wet: Ominous shake
+      objectShake(this, verdict, 2, 500);
+    }
+
+    // Pulse animation for verdict
+    this.tweens.add({
+      targets: verdict,
+      scale: 1.15,
+      duration: 350,
+      yoyo: true,
+      repeat: 3,
+      ease: 'Sine.easeInOut',
+      delay: 400,
+    });
+
+    // Remove letterbox
+    this.time.delayedCall(1000, () => {
+      letterbox(this, false, 400, 50);
+    });
+  }
+
+  private transitionToResults(): void {
+    // Fade out dramatic reveal
+    this.tweens.add({
+      targets: this.dramaticRevealContainer,
+      alpha: 0,
+      duration: 400,
+      onComplete: () => {
+        this.setFlowStep('RESULTS');
+      }
+    });
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => this.time.delayedCall(ms, resolve));
   }
 
   private transitionToInitials(): void {
@@ -1109,8 +1363,10 @@ export class ResultScene extends Phaser.Scene {
 
     this.hasSubmitted = false;
     this.playerRank = 0;
+    this.finalTimeMs = 0;
+    this.isWet = false;
 
-    // don’t kill hidden input here; create() will recreate it on initials step
+    // don't kill hidden input here; create() will recreate it on initials step
   }
 
   private reset(): void {

@@ -1,10 +1,14 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config/gameConfig';
-import { GAUNTLET_COLORS, YAK_FONTS } from '../config/theme';
+import { GAUNTLET_COLORS, YAK_FONTS, YAK_COLORS } from '../config/theme';
 import { GAUNTLET_BEANBAG } from '../config/physicsConfig';
 import { GameStateService } from '../services/GameStateService';
 import { AudioSystem } from '../utils/AudioSystem';
 import { ProceduralTextureFactory, DynamicLightingManager } from '../utils/ProceduralTextureFactory';
+import { applyMotionJuice, impactJuice, popScale } from '../utils/JuiceFactory';
+import { zoomPunch, colorFlash } from '../utils/ScreenEffects';
+import { createEnhancedTrail, createDustPoof, createStarBurst } from '../utils/VisualEffects';
+import { playStationIntro } from '../utils/SceneTransitions';
 
 /**
  * GAUNTLET CORNHOLE - Rapid-fire industrial style
@@ -65,6 +69,10 @@ export class RunScene extends Phaser.Scene {
   private textureFactory!: ProceduralTextureFactory;
   private lightingManager!: DynamicLightingManager;
 
+  // Juice effects
+  private bagTrail: { update: () => void; destroy: () => void } | null = null;
+  private introPlayed = false;
+
   constructor() {
     super({ key: 'RunScene' });
   }
@@ -99,9 +107,15 @@ export class RunScene extends Phaser.Scene {
     this.input.on('pointermove', this.onMove, this);
     this.input.on('pointerup', this.onUp, this);
 
-    // Entrance
+    // Entrance with station intro
     this.cameras.main.fadeIn(400);
     AudioSystem.playBeep(1.2);
+
+    // Play station intro animation
+    if (!this.introPlayed) {
+      this.introPlayed = true;
+      playStationIntro(this, 0); // Station 0 = Cornhole
+    }
   }
 
   private createBackground(): void {
@@ -364,6 +378,7 @@ export class RunScene extends Phaser.Scene {
     // Warning color when bags are low
     if (this.bagQueue <= 3) {
       this.bagsText.setColor('#ff6600');
+      popScale(this, this.bagsText, 1.3, 150);
     }
 
     // Set velocity
@@ -371,7 +386,7 @@ export class RunScene extends Phaser.Scene {
     this.bagVX = 0;
     this.bagVY = -velocity;
 
-    // Visual
+    // Visual with wind-up effect
     this.tweens.add({
       targets: this.bag,
       scale: 1,
@@ -379,6 +394,18 @@ export class RunScene extends Phaser.Scene {
     });
 
     AudioSystem.playSwoosh();
+
+    // Create trail effect for the throw
+    if (this.bagTrail) {
+      this.bagTrail.destroy();
+    }
+    this.bagTrail = createEnhancedTrail(this, this.bag, {
+      color: GAUNTLET_COLORS.bagRed,
+      glow: true,
+      sparkle: 0.2,
+      gradient: true,
+      maxLength: 12
+    });
 
     // Physics loop
     this.events.on('update', this.updateBagPhysics, this);
@@ -394,6 +421,14 @@ export class RunScene extends Phaser.Scene {
 
     this.bag.setPosition(this.bagX, this.bagY);
     this.bag.rotation += this.bagVY * 0.015;
+
+    // Apply squash/stretch based on velocity (juice!)
+    applyMotionJuice(this, this.bag, this.bagVX, this.bagVY, 0.8);
+
+    // Update trail
+    if (this.bagTrail) {
+      this.bagTrail.update();
+    }
 
     // Shadow (shrinks as bag goes up)
     const groundDist = GAME_HEIGHT - this.bagY;
@@ -433,6 +468,22 @@ export class RunScene extends Phaser.Scene {
   private onBoardHit(): void {
     this.events.off('update', this.updateBagPhysics);
     this.isFlying = false;
+
+    // Cleanup trail
+    if (this.bagTrail) {
+      this.bagTrail.destroy();
+      this.bagTrail = null;
+    }
+
+    // Impact juice - squash the bag
+    impactJuice(this, this.bag, 1);
+
+    // Dust poof on landing
+    createDustPoof(this, this.bagX, this.bagY, {
+      color: 0xccaa88,
+      count: 8,
+      size: 40
+    });
 
     // Check if directly in hole
     const distToHole = Phaser.Math.Distance.Between(this.bagX, this.bagY, this.holeX, this.holeY);
@@ -513,15 +564,26 @@ export class RunScene extends Phaser.Scene {
   private onHoleIn(): void {
     this.bagsInHole++;
     AudioSystem.playSuccess();
-    this.cameras.main.flash(300, 255, 100, 100);
 
-    // Animate bag falling into hole
+    // Enhanced screen effects
+    colorFlash(this, YAK_COLORS.success, 'radial', { intensity: 0.5, duration: 300 });
+    zoomPunch(this, 1.04, 150);
+
+    // Star burst at hole
+    createStarBurst(this, this.holeX, this.holeY, {
+      points: 8,
+      colors: [YAK_COLORS.success, YAK_COLORS.secondary, 0xffffff],
+      outerRadius: 100
+    });
+
+    // Animate bag falling into hole with spin
     this.tweens.add({
       targets: this.bag,
-      scale: 0.3,
+      scale: 0.1,
       alpha: 0,
-      duration: 300,
-      ease: 'Power2',
+      rotation: this.bag.rotation + Math.PI * 2,
+      duration: 400,
+      ease: 'Power2.easeIn',
     });
 
     if (this.bagsInHole >= this.requiredBagsInHole) {
@@ -637,17 +699,22 @@ export class RunScene extends Phaser.Scene {
     if (this.timerStarted && this.bagsInHole < this.requiredBagsInHole) {
       this.elapsedMs += delta;
       const seconds = this.elapsedMs / 1000;
+      const totalMs = GameStateService.getCurrentTimeMs();
       this.timerText.setText(seconds.toFixed(2));
 
-      // Color escalation based on time
-      if (seconds > 30) {
+      // Color escalation based on TOTAL gauntlet time (not just this station)
+      if (totalMs >= 73000) {
         this.timerText.setColor('#ff3333'); // Red
-      } else if (seconds > 20) {
+        this.timerText.setScale(1 + Math.sin(Date.now() / 80) * 0.08);
+      } else if (totalMs >= 70000) {
         this.timerText.setColor('#ff6600'); // Orange
-      } else if (seconds > 10) {
+        this.timerText.setScale(1 + Math.sin(Date.now() / 150) * 0.04);
+      } else if (totalMs >= 60000) {
         this.timerText.setColor('#ffcc00'); // Yellow
+        this.timerText.setScale(1);
       } else {
         this.timerText.setColor('#ffffff'); // White
+        this.timerText.setScale(1);
       }
     }
   }
